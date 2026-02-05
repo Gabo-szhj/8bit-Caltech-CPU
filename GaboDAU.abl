@@ -1,0 +1,138 @@
+MODULE      DataAccess
+
+INTERFACE  (Offset7..Offset0,
+                       Sel1..Sel0, SelX, SelS, SelCarry, SelPre, SelF,  
+                       Reset, Clock
+                       -> DataAddr7..DataAddr0, XReg7..XReg0, SReg7..SReg0);
+
+
+TITLE      'Data Memory Access Unit Design'
+
+
+" Description:  This file demonstrates the design of a data memory access unit. 
+"		The unit is calculate the data address for immediate, direct, 
+"               and indexed addressing modes.
+"		The output of the unit are the X Register(8-bits), S Register(8-bits)
+"		, and DataAddress (8-bits).
+"
+" Inputs:       Offset7..Offset0 - 8-bit offset
+"		Accum7..Accum0   - 8-bit accumulator
+"               Sel1..Sel0       - 2 control signals for source select mux
+"                                       Sel = 00 -> XReg
+"                                       Sel = 01 -> SReg
+"                                       Sel = 10 -> ZERO
+"               SelX             - select signal to inc/dec X (1)
+"               SelS             - select signal to inc/dec S (1)
+"               SelCarry         - select signal increment (1) or decrement (0)
+"               SelPre           - control signal for pre (1) /post (0) select mux
+"               SelF             - control signal offset select mux
+"                                       SelF = 0 -> Offset
+"                                       SelF = 1 -> ZERO
+"               Clock            - program counter clock
+"               Reset            - program counter reset
+"
+" Outputs:      XReg7..XReg0           - 8-bit X-Register
+"               SReg7..SReg0           - 8-bit S-Register
+"               DataAddr7..DataAddr0   - 8-bit data address
+"
+" Revision History:
+" 03/07/25   Gabo Zhang  Initial Revision (declaring pins and busses)
+" 03/08/25   Gabo Zhang  Added logic equations and comments
+" 03/22/25   Gabo Zhang  Revised comments
+
+
+
+" Pin/Signal Declarations
+
+" Inputs
+
+Offset7..Offset0  	pin; 			"input    8-bit offset 
+Sel1..Sel0		pin; 			"input    2 c1ontrol signals for source select mux
+SelX			pin; 			"input    select signal to inc/dec X
+SelS			pin; 			"input    select signal to inc/dec S
+SelCarry		pin; 			"input    select signal increment (1) or decrement (0)
+SelPre			pin; 			"input    control signal for pre (1) /post (0) select mux
+SelF			pin; 			"input    control signal offset select mux
+Clock		     	pin; 			"input    program counter clock
+Reset		    	pin; 			"input	  program counter reset
+
+
+
+" Output
+
+XReg7..XReg0         	pin ISTYPE 'REG,KEEP'; 	"output    8-bit X-Register
+SReg7..SReg0         	pin ISTYPE 'REG,KEEP'; 	"output    8-bit S-Register
+DataAddr7..DataAddr0	pin;			"output    8-bit data address 
+
+" Intermediate Terms
+
+S7..S0     				node;  "node    8-bit output from the source select mux
+P7..P0     				node;  "node    8-bit output from the pre/post select mux
+F7..F0     				node;  "node    8-bit output from the offset select mux
+IncC7..IncC0         	                node;  "node    carry bits for inc/dec
+Carry8..Carry0      	                node;  "node    carry bits for adder
+XO7..XO0      	                        node;  "node    ouput from inc/dec X Register before clock
+SO7..SO0      	                        node;  "node    ouput from inc/dec S Register before clock
+
+" Busses/Vectors
+Offset   = [Offset7..Offset0];		" 8 bits of data or offset
+XReg     = [XReg7..XReg0];		" 8 bit X-Register
+SReg     = [SReg7..SReg0];		" 8 bit S-Register
+DataAddr = [DataAddr7..DataAddr0];	" Accumulator or address (8 bits) output
+SOut 	 = [S7..S0];			" Output from the address source select mux
+POut 	 = [P7..P0];			" Output from the pre/post select mux
+FOut 	 = [F7..F0];			" Output from the offset select mux
+IncCIn   = [IncC6..IncC0, SelCarry];	" Carryin for adder with lowest bit set to the select signal
+IncCOut  = [IncC7..IncC0];		" Carryin for adder with lowest bit set to the select signal
+Carryout = [Carry8..Carry1];		" Carryout from the adder
+CarryIn  = [Carry7..Carry0];		" Carryin for the adder
+X_RegOut = [XO7..XO0];                  " Hold inc/dec value fro X_Reg for post instruction
+S_RegOut = [SO7..SO0];                  " Hold inc/dec value fro S_Reg for post instruction
+" Constants
+ZERO  = [ 0, 0, 0, 0, 0, 0, 0, 0];      "8-bit of 0s
+ONES = [ 1, 1, 1, 1, 1, 1, 1, 1];       "8-bit of 1s
+
+EQUATIONS
+
+XReg.CLK = Clock;		" Run the XReg clock
+XReg.CLR = Reset;		" Reset the XReg
+SReg.CLK = Clock;		" Run the SReg clock
+SReg.CLR = Reset;		" Reset the SReg
+
+
+" The 8 x 3:1 mux
+SOut  = (XReg & !Sel1 & !Sel0) #          " Sel = 00 -> XReg
+        (SReg & !Sel1 &  Sel0) #          " Sel = 01 -> SReg
+        (ZERO &  Sel1 & !Sel0);           " Sel = 10 -> ZERO
+
+
+" The 8 x 3:1 mux
+FOut  = (Offset & !SelF) #              " SelF = 0 -> Offset
+        (ZERO & SelF);                  " SelF = 1 -> ZERO
+
+
+" The Incrementer/Decrementer
+
+
+" A 8-bit inc/dec implementation for X Register using adder with 1 as carryin 
+X_RegOut = ((SOut $ (ONES $ SelCarry) $ IncCIn) & SelX) # (!SelX & XReg);        
+XReg := X_RegOut;	                                                         " Update the X Register
+
+" A 8-bit inc/dec implementation for S Register using adder with 1 as carryin 
+S_RegOut = ((SOut $ (ONES $ SelCarry) $ IncCIn) & SelS) # (!SelS & SReg);        
+SReg := S_RegOut;		                                                 " Update the S Register
+
+IncCOut = (SOut & (ONES $ SelCarry)) # (IncCIn & (SOut # (ONES $ SelCarry)));	 " Updating carryout
+
+
+" The 8 x 2:1 mux
+POut  = (SOut & !SelPre) #        						" SelPre = 0 -> SOut
+        (((X_RegOut & SelX & !SelS) # (S_RegOut & !SelX & SelS)) & SelPre);     " SelPre = 1 -> X/S Register depending on SelX and SelS
+
+
+" The adder
+Carry0 = 0;
+DataAddr = POut $ FOut $ CarryIn;				" A 8-bit adder implementation
+Carryout = (POut & FOut) # (CarryIn & (POut # FOut));		" Updating carryout
+
+END DataAccess

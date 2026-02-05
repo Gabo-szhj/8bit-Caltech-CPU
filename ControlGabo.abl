@@ -1,0 +1,932 @@
+MODULE      ControlAccess
+INTERFACE  (ProgramDB15..ProgramDB0, Clock, Reset, C, S, V, Z 
+                          -> ALUc12..ALUc0, DAUc6..DAUc0, PMAc5..PMAc0, RD, WR, IO, DDSel1..DDSel0, ALUSel0, PMASel0, IR15..IR0);
+
+
+
+" Description:  This file is the design of a control unit for the Caltech 10 CPU.
+"               The design uses the bit decoding technique to interpret instructions.
+"				The input to the unit is the program data bus, the C,V,S,Z flags from ALU
+"				and the clock & reset signals.  There is a clocked instruction register
+"               taking input from the Programdata bus for instruction decoding. The ouputs  
+"               are the 13 control bits for ALU, 7 control bits for DAU, 6 control bits 
+"               for the PAU. The datadata bus mux, PAU offset mux, and ALU data input mux
+"				select bits are also outputed. A finite state machine implementation was 
+"               also in place for CALL and RTS instruction that takes multiple clock cycles. 
+"				
+"
+" Inputs:       ProgramDB15..ProgramDB0 		- 16-bit program data bus for instruction input
+"				IR15..IR0 						- 16-bit clocked instruction register from program data bus
+"				C								- Carry flag from ALU for branch instruction decoding
+"				V								- Signed overflow flag from ALU for branch instruction decoding
+"				S								- Sign flag from ALU for branch instruction decoding
+"				Z								- Zero flag from ALU for branch instruction decoding
+"				Clock		     				- Instruction register clock
+"				Reset		     				- Instruction register reset
+"				CALL							- Signal for the CALL instruction (1)
+"				RTS								- Signal for the RTS instruction (1)
+"
+"
+" Outputs:      ALUc12..ALUc0		- 13-bit control signal for the ALU
+"				DAUc6..DAUc0		- 7-bit control signal for the DAU
+"				PMAc5..PMAc0		- 6-bit control signal for the PAU
+"				RD					- read signal to take data from data memory location
+"				WR					- write signal to write data to data memory location
+"				IO					- IO signal to turn on the IO space instead of data memory
+"				DDSel1..DDSel0		- 2 mux select signals for data data bus input 
+"												 DDSel = 00 -> accumulator as DataDataBus
+"												 DDSel = 01 -> flags as DataDataBus
+"												 DDSel = 10 -> PC7..PC0 as DataDataBus
+"												 DDSel = 00 -> PC12..PC8 as DataDataBus
+"				ALUSel0				- mux select signals for the ALU in mux 
+"												 ALUSel = 0 -> Datadata Bus
+"												 ALUSel = 1 -> first 8 bit of the instruction bus as offset
+"				PMASel0				- mux select signals for the PAU in mux
+"												 PMASel = 0 -> first 8 bit of the instruction bus as offset
+"												 PMASel = 1 -> Datadata Bus
+"
+" Internal Signal for Finite State Machine:
+"				Call2..Call0        - the statebits to define the Call cycles
+"												Call2: S ¬ S – 1; (S) ¬ (PC + 1)7:0; PC ¬ a 
+"												Call1: PC + 1
+"												Call0: S ¬ S – 1; (S) ¬ (PC + 1)12:8;
+"				RTS1..RTS0          - the statebits to define the RTS cycles
+"												RTS(signal): PC7:0 ¬ (S); S ¬ S + 1;
+"												RTS1: PC12:8 ¬ (S); S ¬ S + 1
+"												RTS0: PC + 1
+"				HoldIR				- the signal to HOLD instruction regsiter during CALL/RTS cycles
+"
+" Revision History:
+" 03/16/25   Gabo Zhang  Initial Revision with Pin Declaration
+" 03/17/25   Gabo Zhang  Added logic equation for instruction decoding
+" 03/18/25   Gabo Zhang  Added logic equation for instruction decoding
+" 03/19/25   Gabo Zhang  Added FSM implementation
+" 03/21/25   Gabo Zhang  Revised errors in finite state machine
+" 03/22/25   Gabo Zhang  Added comments
+
+
+
+" Pin/Signal Declarations
+
+" Input
+
+
+ProgramDB15..ProgramDB0 pin;						"input	  16-bit program data bus for instruction input
+IR15..IR0 				pin ISTYPE 'REG,KEEP';		"input	  16-bit clocked instruction register from program data bus
+C						pin;						"input	  Carry flag from ALU for branch instruction decoding
+V						pin;						"input	  Signed overflow flag from ALU for branch instruction decoding
+S						pin;						"input	  Sign flag from ALU for branch instruction decoding
+Z						pin;						"input	  Zero flag from ALU for branch instruction decoding
+Clock		     		pin; 						"input    Instruction register clock
+Reset		     		pin; 						"input    Instruction register reset
+
+" Call or RTS Instruction for FSM
+CALL	pin;				"input    Signal for the CALL instruction (1)
+RTS		pin;				"input    Signal for the RTS instruction (1)
+
+
+" Output
+
+ALUc12..ALUc0		pin;			"output    13-bit control signal for the ALU
+DAUc6..DAUc0		pin;			"output    7-bit control signal for the DAU
+PMAc5..PMAc0		pin;			"output    6-bit control signal for the PAU
+RD					pin;			"output    read signal to take data from data memory location
+WR					pin;			"output    write signal to write data to data memory location
+IO					pin;			"output    IO signal to turn on the IO space instead of data memory
+DDSel1..DDSel0		pin;			"output    2 mux select signals for data data bus input 
+												" DDSel = 00 -> accumulator as DataDataBus
+												" DDSel = 01 -> flags as DataDataBus
+												" DDSel = 10 -> PC7..PC0 as DataDataBus
+												" DDSel = 00 -> PC12..PC8 as DataDataBus
+ALUSel0				pin;			"output    mux select signals for the ALU in mux 
+												" ALUSel = 0 -> Datadata Bus
+												" ALUSel = 1 -> first 8 bit of the instruction bus as offset
+PMASel0				pin;			"output    mux select signals for the PAU in mux
+												" PMASel = 0 -> first 8 bit of the instruction bus as offset
+												" PMASel = 1 -> Datadata Bus
+
+" Internal Signal for Finite State Machine 
+Call2..Call0         	node ISTYPE 'REG'; 		"the statebits to define the Call cycles
+												"Call2: S ¬ S – 1; (S) ¬ (PC + 1)7:0; PC ¬ a 
+												"Call1: PC + 1
+												"Call0: S ¬ S – 1; (S) ¬ (PC + 1)12:8;
+RTS1..RTS0          	node ISTYPE 'REG'; 		"the statebits to define the RTS cycles
+												"RTS(signal): PC7:0 ¬ (S); S ¬ S + 1;
+												"RTS1: PC12:8 ¬ (S); S ¬ S + 1
+												"RTS0: PC + 1
+HoldIR					node; 					"the signal to HOLD instruction regsiter during CALL/RTS cycles
+
+
+
+" Bus
+IR = [IR15..IR0];	"16-bit instruction register bus
+
+" Define the State Bits
+StateBits = [Call2..Call0, RTS1..RTS0];		"the statebits unique to each FSM output with one hot encoding
+
+" Define the States
+Idle        = [ 0, 0, 0, 0, 0];		"Start of a cycle, waiting for RTS or CALL instruction
+CallH       = [ 0, 0, 1, 0, 0];		"The CALL instruction is asserted (1st cycle) and now 
+									"predecrement S then load PC12..PC8 to memory 
+									"location (s) (2nd cycle)
+CallL       = [ 1, 0, 0, 0, 0];		"The PC12..PC8 has been loaded to (s) (2nd cycle), now 
+									"predecrement S then load PC7..PC0 to memory 
+									"location (s) (3rd cycle)
+CallIncPC   = [ 0, 1, 0, 0, 0];		"The PC7..PC0 has been loaded to (s) (3rd cycle), now
+									"increment PC to read instruction after CALL instruction
+									"cycles are over (4th cycle)
+ReturnH     = [ 0, 0, 0, 1, 0];		"After RTS instraction is asserted and S is post incrermented,
+									" data at lcoation (s) is loaded into PC7:0 (1st cycle), 
+									"post increment S and load data at location (s) to PC12:8
+									"(2nd cycle)
+ReturnIncPC = [ 0, 0, 0, 0, 1];		"After post increment S and load data at location (s) to PC12:8
+									"(2nd cycle) increment the PC to read next instruction 
+									"after the RTS instrucion cycles are over (3rd cycle)
+
+
+
+STATE_DIAGRAM  StateBits 			" a Moore state machine
+
+STATE  Idle:						" Waiting fo the CALL or RTS instruction
+	
+	IF  	(CALL)  THEN  CallH		" CALL instruction on (1st cycle), load higher 5-bit 
+									" from PC to S memory location (2nd cycle)
+	ELSE IF	(RTS)	THEN  ReturnH	" RTS instruction on, immediately load data from S 
+									" data memory address to lower 8-bit of PC (1st cycle), 
+									" go to load the higher 5-bit of PC (2nd cycle)
+	ELSE			      Idle;		" Otherwise keep waiting 
+
+
+STATE  CallH:		" load higher 5 bit from PC to S data memory location
+					" after predecrement (2nd cycle of CALL)
+
+	GOTO CallL;		" always to go to the 3rd cycle of CALL
+
+STATE  CallL:		" load lower 8 bit from PC to S data memory location
+					" after predecrement (3nd cycle of CALL)
+
+	GOTO CallIncPC;	" always go to the 4th cycle of CALL
+
+STATE  CallIncPC:	" increment the PC
+
+	GOTO Idle;		" CALL cycles ended, go back to waiting for another instruction
+
+
+STATE  ReturnH:		" post increment S and load data at location (s) to PC12:8
+					" (2nd cycle of RTS)
+
+	GOTO ReturnH;	" always go to the 3rd cycle of RTS
+
+STATE  ReturnIncPC:	" increment the PC
+
+	GOTO Idle;		" RTS cycles ended, go back to waiting for another instruction
+
+
+EQUATIONS
+
+IR.CLK = Clock;   " instruction register clock
+IR.CLR = Reset;	  " instruction register reset
+
+"Hold IR when going through the RTS/CALL cycles
+IR:= (HoldIR & IR) # (!HoldIR & [ProgramDB15..ProgramDB0]);
+
+" clocks for the state bits/outputs
+StateBits.CLK = Clock;
+
+" go to Idle on reset
+StateBits.CLR = Reset;
+
+
+" Hold instruction register if in 1st cycle of CALL/RTS until the last cycle of CALL/RTS
+WHEN (StateBits == Idle) THEN {
+	HoldIR = CALL # RTS;
+} ElSE {
+	HoldIR = !(Call1 # RTS0);
+}
+
+
+" CALL or RTS Control Signal for FSM, also the first cycle of each instruction
+CALL = (IR15 & IR14 & IR13);
+																							 "CALL  a
+RTS  = (!IR15 & !IR14 & !IR13 & IR12 & IR11 & IR10 & IR9 & IR8 & !IR7 & !IR6 & !IR5 & !IR4 & !IR3 & !IR2 & !IR1 & !IR0); "RTS  
+
+
+
+" ALU Controls
+ALUc0 = (!IR15 & !IR14 & IR13 & IR12 & !IR11 & !IR10)#				"CMP   m
+																	"CMP   X, o
+																	"CMP   S, o
+																	"CMPI  k
+		(!IR15 & !IR14 & !IR13 & IR12 & IR11 & !IR10)#				"SBB   m
+																	"SBB   X, o
+																	"SBB   S, o
+																	"SBBI  k
+		(!IR15 & !IR14 & !IR13 & IR12 & !IR11 & !IR10)#				"SUB m
+																	"SUB X, o
+																	"SUB S, o
+																	"SUBI k	
+		(!IR15 & !IR14 & IR13 & !IR12 & !IR11 & IR10 & IR9 & IR8)#	"NEG
+		(!IR15 & !IR14 & IR13 & !IR12 & IR11 & IR10 & !IR9 & IR8)#	"NOT
+		(!IR15 & IR14 & IR13 & IR12 & IR11 & !IR10 & IR9 & IR8);	"DEC
+
+ALUc1 = (!IR15 & IR14 & IR13 & !IR12 & !IR11 & !IR10)#					"ADC   m
+																		"ADC   X, o
+																		"ADC   S, o
+																		"ADCI  k
+		(!IR15 & IR14 & IR13 & !IR12 & IR11 & !IR10)#					"ADD   m
+																		"ADD   S, o
+																		"ADDI  k
+		(!IR15 & IR14 & IR13 & IR12 & !IR11 & IR10)#					"ADD   X, o
+																		"OR    m
+																		"OR    X, o
+																		"OR    S, o
+																		"ORI   k
+		(!IR15 & !IR14 & IR13 & IR12 & !IR11 & IR10)#					"XOR   m
+																		"XOR   X, o
+																		"XOR   S, o
+																		"XORI  k
+		(IR15 & !IR14 & !IR13 & !IR11)#									"LDD   m
+																		"LD    X + o
+																		"LD    X+ + o
+																		"LD    +X + o
+																		"LD    S + o
+																		"LD    S+ + o
+																		"LD    +S + o
+																		"IN    p
+		(IR15 & !IR14 & !IR13 & IR11 & IR9 & !IR8)#						"LD X- + o
+																		"LD -X + o
+																		"LD S- + o
+																		"LD -S + o
+		(IR15 & !IR14 & !IR13 & !IR12 & IR11 & !IR10 & !IR9 & IR8)#		"LDI k
+		(!IR15 & !IR14 & !IR13 & !IR12 & !IR11 & !IR10 & IR9 & !IR8)# 	"POPF
+		(!IR15 & !IR14 & IR13 & !IR12 & !IR11 & IR10 & IR9 & IR8)#		"NEG
+		(!IR15 & !IR14 & IR13 & !IR12 & IR11 & IR10 & !IR9 & IR8)#		"NOT
+		(!IR15 & IR14 & IR13 & IR12 & IR11 & !IR10 & IR9 & IR8);		"DEC
+
+ALUc2 = (!IR15 & !IR14 & IR13 & IR12 & !IR11 & !IR10)#					"CMP   m
+																		"CMP   X, o
+																		"CMP   S, o
+																		"CMPI  k
+		(!IR15 & IR14 & IR13 & IR12 & !IR11 & IR10)#					"OR    m
+																		"OR    X, o
+																		"OR    S, o
+																		"ORI   k
+		(!IR15 & !IR14 & !IR13 & IR12 & !IR10)#							"SBB   m
+																		"SBB   X, o
+																		"SBB   S, o
+																		"SBBI  k
+																		"SUB   m
+																		"SUB   X, o
+																		"SUB   S, o
+																		"SUBI  k
+		(!IR15 & !IR14 & IR13 & IR12 & !IR11 & IR10)#					"XOR   m
+																		"XOR   X, o
+																		"XOR   S, o
+																		"XORI  k	
+		(!IR15 & IR14 & IR13 & IR12 & IR11 & !IR10 & IR9 & IR8)#		"DEC
+		(!IR15 & IR14 & !IR13 & IR12 & !IR10 & !IR9 & !IR8);			"RLC
+																		"LSL
+
+
+ALUc3 = (!IR15 & IR14 & IR13 & !IR12 & !IR10)#							"ADC   m
+																		"ADC   X, o
+																		"ADC   S, o
+																		"ADCI  k
+																		"ADD   m
+																		"ADD   X, o
+																		"ADD   S, o
+																		"ADDI  k
+		(!IR15 & IR14 & !IR13 & !IR12 & IR10)#							"AND   m
+																		"AND   X, o
+																		"AND   S, o
+																		"ANDI  k
+																		"TST   m
+																		"TST   X, o
+																		"TST   S, o
+																		"TSTI  k
+		(!IR15 & IR14 & IR13 & IR12 & !IR11 & IR10)#					"OR    m
+																		"OR    X, o
+																		"OR    S, o
+																		"ORI   k
+		(!IR15 & IR14 & !IR13 & IR12 & !IR10 & !IR9 & !IR8)#			"RLC
+																		"LSL
+		(!IR15 & IR14 & IR13 & IR12 & IR11 & !IR10 & IR9 & IR8)#		"DEC
+		(IR15 & !IR14 & !IR13 & !IR11)#									"LDD   m
+																		"LD    X + o
+																		"LD    X+ + o
+																		"LD    +X + o
+																		"LD    S + o
+																		"LD    S+ + o
+																		"LD    +S + o
+																		"IN    p
+		(IR15 & !IR14 & !IR13 & IR11 & IR9 & !IR8)#						"LD X- + o
+																		"LD -X + o
+																		"LD S- + o
+																		"LD -S + o
+		(IR15 & !IR14 & !IR13 & !IR12 & IR11 & !IR10 & !IR9 & IR8)#		"LDI k
+		(IR15 & !IR14 & !IR13 & IR12 & !IR11 & !IR10 & !IR9 & !IR8)#	"INp
+		(!IR15 & !IR14 & !IR13 & !IR12 & !IR11 & !IR10 & IR9 & !IR8); 	"POPF
+
+
+ALUc4 = (!IR15 & IR14 & IR13 & !IR12 & !IR10)#							"ADC   m
+																		"ADC   X, o
+																		"ADC   S, o
+																		"ADCI  k
+																		"ADD   m
+																		"ADD   X, o
+																		"ADD   S, o
+																		"ADDI  k
+		(!IR15 & !IR14 & IR13 & IR12 & !IR11 & !IR10)#					"CMP   m
+																		"CMP   X, o
+																		"CMP   S, o
+																		"CMPI  k
+		(!IR15 & !IR14 & !IR13 & IR12 & !IR10)#							"SBB   m
+																		"SBB   X, o
+																		"SBB   S, o
+																		"SBBI  k
+																		"SUB   m
+																		"SUB   X, o
+																		"SUB   S, o
+																		"SUBI  k
+		(!IR15 & !IR14 & !IR13 & !IR12 & !IR11 & !IR10 & !IR9 & !IR8)#	"INC
+		(!IR15 & IR14 & IR13 & IR12 & IR11 & !IR10 & IR9 & IR8)#		"DEC
+		(!IR15 & IR14 & !IR13 & IR12 & !IR10 & !IR9 & !IR8);			"RLC
+																		"LSL
+
+ALUc5 = 0;
+ALUc6 = (!IR15 & !IR14 & IR13 & IR12 & !IR11 & !IR10)#					"CMP   m
+																		"CMP   X, o
+																		"CMP   S, o
+																		"CMPI  k
+		(!IR15 & !IR14 & !IR13 & !IR12 & !IR11 & !IR10 & !IR9 & !IR8)#	"INC
+		(!IR15 & !IR14 & IR13 & !IR12 & !IR11 & IR10 & IR9 & IR8)#		"NEG
+		(!IR15 & !IR14 & !IR13 & IR12 & !IR10);							"SBB   m
+																		"SBB   X, o
+																		"SBB   S, o
+																		"SBBI  k
+																		"SUB   m
+																		"SUB   X, o
+																		"SUB   S, o
+																		"SUBI  k
+
+ALUc7 = (!IR15 & IR14 & IR13 & !IR12 & !IR11 & !IR10)#					"ADC   m
+																		"ADC   X, o
+																		"ADC   S, o
+																		"ADCI  k
+		(!IR15 & IR14 & !IR13 & IR12 & !IR11 & !IR10 & !IR9 & !IR8)#	"RLC
+		(!IR15 & !IR14 & !IR13 & IR12 & IR11 & !IR10);					"SBB   m
+																		"SBB   X, o
+																		"SBB   S, o
+																		"SBBI  k
+
+ALUc8 = (!IR15 & !IR14 & IR13 & IR12 & !IR11 & !IR10)#					"CMP   m
+																		"CMP   X, o
+																		"CMP   S, o
+																		"CMPI  k
+		(!IR15 & IR14 & !IR13 & !IR12 & IR11 & IR10)#					"TST   m
+																		"TST   X, o
+																		"TST   S, o
+																		"TSTI  k
+		(IR15 & !IR14 & IR13)#											"STD   m
+																		"ST    X + o
+																		"ST    X+ + o
+																		"ST    X- + o
+																		"ST    +X + o
+																		"ST    -X + o
+																		"ST    S + o
+																		"ST    S+ + o
+																		"ST    S- + o
+																		"ST    +S + o
+																		"ST    -S + o
+																		"JG    r
+																		"JGE   r
+																		"JL    r
+																		"JLE   r
+																		"JNU   r
+																		"JNV   r
+																		"JU    r
+																		"JV    r
+																		"OUT   p
+		(IR15 & !IR14 & IR11 & !IR9 & !IR8)#							"JA    r
+																		"JAE   r
+																		"JL    r
+																		"JLE   r
+																		"JNE   r
+																		"JNS   r
+																		"JNU   r
+																		"JNV   r
+		(IR15 & !IR14 & IR11 & IR9 & IR8)#								"JB    r
+																		"JBE   r
+																		"JE    r
+																		"JG    r
+																		"JGE   r
+																		"JS    r
+																		"JU    r
+																		"JV    r
+		(!IR15 & !IR14 & !IR13 & !IR12 & !IR11 & !IR10 & IR9 & !IR8)#	"POPF
+		(!IR15 & !IR14 & !IR13 & !IR12 & IR11 & IR10 & IR9 & !IR8)#		"PUSHF
+		(!IR15 & !IR14 & !IR13 & IR12 & IR11 & IR10 & IR9 & IR8 & IR7)#		"NOP
+		(IR15 & IR14 & !IR13 & !IR12)#									"JMP a
+		(IR15 & IR14 & !IR13 & IR12)#									"JMP a
+		(RTS & (StateBits == Idle))#
+		RTS1#															"PC12:8 ¬ (S); S ¬ S + 1
+		RTS0#															"Increment PC
+		Call2#															"S ¬ S – 1; (S) ¬ (PC + 1)7:0; PC ¬ a
+		Call1#															"Increment PC
+		Call0;															"S ¬ S – 1; (S) ¬ (PC + 1)12:8;
+
+
+ALUc9 = (!IR15 & IR14 & IR13 & !IR12 & !IR10)#							"ADC   m
+																		"ADC   X, o
+																		"ADC   S, o
+																		"ADCI  k
+																		"ADD   m
+																		"ADD   X, o
+																		"ADD   S, o
+																		"ADDI  k
+		(!IR15 & IR14 & !IR13 & !IR12 & !IR11 & IR10)#					"AND   m
+																		"AND   X, o
+																		"AND   S, o
+																		"ANDI  k
+		(!IR15 & !IR14 & IR13 & IR12 & !IR11)#							"CMP   m
+																		"CMP   X, o
+																		"CMP   S, o
+																		"CMPI  k
+																		"XOR   m
+																		"XOR   X, o
+																		"XOR   S, o
+																		"XORI  k
+		(!IR15 & !IR14 & !IR13 & IR12 & !IR10)#							"SBB   m
+																		"SBB   X, o
+																		"SBB   S, o
+																		"SBBI  k
+																		"SUB   m
+																		"SUB   X, o
+																		"SUB   S, o
+																		"SUBI  k
+		(!IR15 & IR14 & IR13 & IR12 & !IR11 & IR10)#					"OR    m
+																		"OR    X, o
+																		"OR    S, o
+																		"ORI   k
+		(!IR15 & IR14 & !IR13 & !IR12 & IR11 & IR10)#					"TST   m
+																		"TST   X, o
+																		"TST   S, o
+																		"TSTI  k
+		(!IR15 & !IR14 & !IR13 & !IR12 & !IR11 & !IR10 & !IR9 & !IR8)#	"INC
+		(!IR15 & IR14 & IR13 & IR12 & IR11 & !IR10 & IR9 & IR8)#		"DEC
+		(!IR15 & IR14 & !IR13 & IR12 & !IR10 & !IR9 & !IR8)#			"RLC
+																		"LSL
+		(!IR15 & !IR14 & !IR13 & !IR12 & !IR11 & !IR10 & IR9 & !IR8)# 	"POPF
+		(!IR15 & !IR14 & IR13 & !IR12);									"NEG
+																		"NOT
+
+
+ALUc10 =(!IR15 & !IR14 & !IR13 & IR12 & !IR10)#						"SBB   m
+																		"SBB   X, o
+																		"SBB   S, o
+																		"SBBI  k
+																		"SUB   m
+																		"SUB   X, o
+																		"SUB   S, o
+																		"SUBI  k
+		(!IR15 & IR14 & IR13 & !IR12 & !IR10)#							"ADC   m
+																		"ADC   X, o
+																		"ADC   S, o
+																		"ADCI  k
+																		"ADD   m
+																		"ADD   X, o
+																		"ADD   S, o
+																		"ADDI  k
+		(!IR15 & !IR14 & IR13 & IR12 & !IR11 & !IR10)#					"CMP   m
+																		"CMP   X, o
+																		"CMP   S, o
+																		"CMPI  k				
+		(!IR15 & !IR14 & !IR13 & !IR12 & !IR11 & !IR10 & !IR9 & !IR8)#	"INC
+		(!IR15 & IR14 & IR13 & IR12 & IR11 & !IR10 & IR9 & IR8)#		"DEC
+		(!IR15 & IR14 & !IR13 & IR12 & !IR10 & !IR9 & !IR8)#			"RLC
+																		"LSL
+		(!IR15 & !IR14 & !IR13 & !IR12 & !IR11 & !IR10 & IR9 & !IR8)# 	"POPF
+		(!IR15 & !IR14 & IR13 & !IR12 & !IR11 & IR10 & IR9 & IR8);		"NEG
+																		
+
+ALUc11= (!IR15 & !IR14 & IR13 & IR12 & !IR11 & !IR10)#					"CMP   m
+																		"CMP   X, o
+																		"CMP   S, o
+																		"CMPI  k
+		(!IR15 & !IR14 & !IR13 & IR12 & !IR10)#							"SBB   m
+																		"SBB   X, o
+																		"SBB   S, o
+																		"SBBI  k
+																		"SUB   m
+																		"SUB   X, o
+																		"SUB   S, o
+																		"SUBI  k
+		(!IR15 & IR14 & IR13 & IR12 & IR11 & !IR10 & IR9 & IR8);		"DEC
+
+ALUc12= (!IR15 & !IR14 & !IR13 & !IR12 & !IR11 & !IR10 & IR9 & !IR8); 	"POPF
+
+
+"DAU Controls
+DAUc0 = (!IR15 & IR14 & IR13 & !IR12 & !IR10 & IR9 & !IR8)#				"ADC   S, o
+																		"ADD   S, o
+		(!IR15 & IR14 & !IR13 & !IR12 & IR10 & IR9 & !IR8)#				"AND   S, o
+																		"TST   S, o																
+		(!IR15 & !IR14 & IR13 & IR12 & !IR11 & IR9 & !IR8)#				"CMP   S, o
+																		"XOR   S, o
+		(!IR15 & !IR14 & !IR13 & IR12 & !IR10 & IR9 & !IR8)#			"SBB   S, o
+																		"SUB   S, o
+		(IR15 & !IR14 & !IR10 & IR9 & !IR8)#							"LD    S+ + o
+																		"LD    S- + o
+																		"LD    +S + o
+																		"LD    -S + o
+																		"ST    S+ + o
+																		"ST    S- + o
+																		"ST    +S + o
+																		"ST    -S + o
+		(IR15 & !IR14 & !IR11 & !IR10 & IR9)#							"LD    S + o
+																		"LD    S+ + o
+																		"LD    +S + o
+																		"ST    S + o
+																		"ST    S+ + o
+																		"ST    +S + o	
+		(!IR15 & !IR14 & !IR13 & !IR12 & !IR11 & !IR10 & IR9 & !IR8)#	"POPF
+		(!IR15 & !IR14 & !IR13 & !IR12 & IR11 & IR10 & IR9 & !IR8)#		"PUSHF
+		(!IR15 & IR14 & IR13 & IR12 & !IR11 & IR10 & IR9 & !IR8)#		"OR    S, o
+		RTS1#															"PC12:8 ¬ (S); S ¬ S + 1
+		(RTS & (StateBits == Idle))#									"PC7:0 ¬ (S); S ¬ S + 1;
+		Call0#															"S ¬ S – 1; (S) ¬ (PC + 1)12:8;
+		Call2#															"S ¬ S – 1; (S) ¬ (PC + 1)7:0;
+		Call1;															"Increment PC														
+		
+
+DAUc1 = (IR15 & !IR14 & IR11 & !IR9 & !IR8)#							"JA    r
+																		"JAE   r
+																		"JL    r
+																		"JLE   r
+																		"JNE   r
+																		"JNS   r
+																		"JNU   r
+																		"JNV   r
+		(IR15 & !IR14 & IR11 & IR9 & IR8)#								"JB    r
+																		"JBE   r
+																		"JE    r
+																		"JG    r
+																		"JGE   r
+																		"JS    r
+																		"JU    r
+																		"JV    r
+		(IR15 & IR14 & !IR13 & !IR12)#									"JMP a
+		(IR15 & IR14 & !IR13 & IR12)#									"JMP a
+		(IR15 & !IR14 & !IR11 & !IR10 & !IR9 & !IR8)#					"LDD   m
+																		"STD   m
+																		"IN    p
+																		"OUT   p
+		(IR15 & !IR14 & !IR13 & !IR12 & IR11 & !IR10 & !IR9 & IR8)#		"LDI   k
+		(!IR15 & IR14 & IR13 & !IR12 & !IR10 & IR9 & IR8)#				"ADCI  k
+																		"ADDI  k
+		(!IR15 & IR14 & IR13 & !IR12 & !IR10 & !IR9 & !IR8)#			"ADC   m
+																		"ADD   m
+		(!IR15 & IR13 & IR12 & !IR11 & IR10 & IR9 & IR8)#				"ORI   k
+																		"XORI  k
+		(!IR15 & IR13 & IR12 & !IR11 & IR10 & !IR9 & !IR8)#				"OR    m
+																		"XOR   m
+		(!IR15 & !IR14 & !IR13 & IR12 & !IR10 & IR9 & IR8)#				"SBBI  k
+																		"SUBI  k
+		(!IR15 & !IR14 & !IR13 & IR12 & !IR10 & !IR9 & !IR8)#			"SBB   m
+																		"SUB   m
+		(!IR15 & IR14 & !IR13 & !IR12 & IR10 & !IR9 & !IR8)#			"AND   m
+																		"TST   m
+		(!IR15 & IR14 & !IR13 & !IR12 & IR10 & IR9 & IR8)#				"ANDI  k
+																		"TSTI  k
+		(!IR15 & !IR11 & !IR10 & !IR9 & !IR8)#							"ADC   m
+																		"CMP   m
+																		"INC
+																		"RLC
+																		"SUB   m
+		(!IR15 & !IR14 & IR13 & IR12 & !IR11 & !IR10 & IR9 & IR8)#		"CMPI  k
+		(!IR15 & !IR14 & IR13 & !IR12)#									"NEG
+																		"NOT
+		(!IR15 & IR14 & !IR13 & IR12 & !IR10 & !IR9 & !IR8)#			"RLC
+																		"LSL
+		(!IR15 & IR14 & IR13 & IR12 & IR11 & !IR10 & IR9 & IR8)#		"DEC
+		(!IR15 & !IR14 & !IR13 & IR12 & IR11 & IR10 & IR9 & IR8 & IR7)#	"NOP							
+		Call1#															"Increment PC
+		RTS0#															"Increment PC
+		(IR15 & !IR14 & IR12 & !IR11 & !IR10 & !IR9 & !IR8);			"INp
+																		"OUT
+
+DAUc2 = (IR15 & !IR14 & IR10 & IR9 & !IR8);								"LD    X+ + o
+																		"LD    X- + o
+																		"LD    +X + o
+																		"LD    -X + o
+																		"ST    X+ + o
+																		"ST    X- + o
+																		"ST    +X + o
+																		"ST    -X + o
+
+
+DAUc3 = (!IR15 & !IR14 & !IR13 & !IR12 & !IR11 & !IR10 & IR9 & !IR8)#	"POPF
+		(!IR15 & !IR14 & !IR13 & !IR12 & IR11 & IR10 & IR9 & !IR8)#		"PUSHF
+		(IR15 & !IR14 & !IR10 & IR9 & !IR8)#							"LD    S+ + o
+																		"LD    S- + o
+																		"LD    +S + o
+																		"LD    -S + o
+																		"ST    S+ + o
+																		"ST    S- + o
+																		"ST    +S + o
+																		"ST    -S + o
+		RTS1#															"PC12:8 ¬ (S); S ¬ S + 1;
+		(RTS & (StateBits == Idle))#									"PC7:0 ¬ (S); S ¬ S + 1
+		Call0#															"S ¬ S – 1; (S) ¬ (PC + 1)12:8;
+		Call2;															" S ¬ S – 1; (S) ¬ (PC + 1)7:0;
+																		" PC ¬ a
+													
+
+DAUc4 = (!IR15 & !IR14 & !IR13 & !IR12 & !IR11 & !IR10 & IR9 & !IR8)#	"POPF
+		(IR15 & !IR14 & !IR11 & IR9 & !IR8)#							"LD    X+ + o
+																		"LD    +X + o
+																		"LD    S+ + o
+																		"LD    +S + o
+																		"ST    X+ + o
+																		"ST    +X + o
+																		"ST    S+ + o
+																		"ST    +S + o
+		RTS1#															"PC12:8 ¬ (S); S ¬ S + 1;
+		(RTS & (StateBits == Idle));									"PC7:0 ¬ (S); S ¬ S + 1
+	
+DAUc5 = (IR15 & !IR14 & !IR12 & IR9 & !IR8)#							"LD    +X + o
+																		"LD    -X + o
+																		"LD    +S + o
+																		"LD    -S + o
+																		"ST    +X + o
+																		"ST    -X + o
+																		"ST    +S + o
+																		"ST    -S + o
+		(!IR15 & !IR14 & !IR13 & !IR12 & IR11 & IR10 & IR9 & !IR8)#		"PUSHF
+		Call0#															"S ¬ S – 1; (S) ¬ (PC + 1)12:8;
+		Call2;															" S ¬ S – 1; (S) ¬ (PC + 1)7:0; 
+																		" PC ¬ a
+															
+
+
+DAUc6 = (!IR15 & !IR14 & !IR13 & IR12 & !IR10 & IR9 & IR8)#				"SBBI  k
+																		"SUBI  k
+		(!IR15 & !IR14 & IR13 & IR12 & !IR11 & IR9 & IR8)#				"CMPI  k
+																		"XORI  k
+		(!IR15 & IR14 & !IR13 & !IR12 & IR10 & IR9 & IR8)#				"ANDI  k
+																		"TSTI  k
+		(!IR15 & IR14 & IR13 & !IR12 & !IR10 & IR9 & IR8)#				"ADCI  k
+																		"ADDI  k
+		(!IR15 & IR14 & IR13 & IR12 & !IR11 & IR10 & IR9 & IR8)#		"ORI   k
+		(!IR15 & !IR14 & !IR13 & !IR12 & !IR11 & !IR10 & !IR9 & !IR8)#	"INC
+		(!IR15 & IR14 & IR13 & IR12 & IR11 & !IR10 & IR9 & IR8)#		"DEC
+		(!IR15 & IR14 & !IR13 & IR12 & !IR10 & !IR9 & !IR8)#			"RLC
+																		"LSL
+		(!IR15 & !IR14 & !IR13 & !IR12 & !IR11 & !IR10 & IR9 & !IR8)# 	"POPF
+		(!IR15 & !IR14 & IR13 & !IR12)#									"NEG
+																		"NOT
+		(!IR15 & !IR14 & !IR13 & !IR12 & IR11 & IR10 & IR9 & !IR8)#		"PUSHF
+		(!IR15 & !IR14 & !IR13 & IR12 & IR11 & IR10 & IR9 & IR8 & IR7)#		"NOP
+		(IR15 & !IR14 & IR11 & !IR9 & !IR8)#							"JA    r
+																		"JAE   r
+																		"JL    r
+																		"JLE   r
+																		"JNE   r
+																		"JNS   r
+																		"JNU   r
+																		"JNV   r
+		(IR15 & !IR14 & IR11 & IR9 & IR8)#								"JB    r
+																		"JBE   r
+																		"JE    r
+																		"JG    r
+																		"JGE   r
+																		"JS    r
+																		"JU    r
+																		"JV    r
+		(IR15 & IR14 & !IR13 & !IR12)#									"JMP a
+		(IR15 & IR14 & !IR13 & IR12)#									"JMP a
+		(IR15 & !IR14 & !IR13 & !IR12 & IR11 & !IR10 & !IR9 & IR8)#		"LDI   k
+		RTS1#															"PC7:0 ¬ (S); S ¬ S + 1;
+		RTS0#															"PC12:8 ¬ (S); S ¬ S + 1
+		(RTS & (StateBits == Idle))#									" Increment PC
+		Call2#															" S ¬ S – 1; (S) ¬ (PC + 1)7:0; 
+																		" PC ¬ a
+		Call1#															"Increment PC
+		Call0;															"S ¬ S – 1; (S) ¬ (PC + 1)12:8;
+
+
+
+"PMA Controls
+PMAc0 = (IR15 & IR14 & !IR13 & !IR12)#									"JMP a
+		(IR15 & IR14 & !IR13 & IR12)#									"JMP a
+		Call2;															" S ¬ S – 1; (S) ¬ (PC + 1)7:0; 
+																		" PC ¬ a
+
+PMAc1 = (IR15 & !IR14 & !IR13 & !IR12 & IR11 & !IR10 & !IR9 & !IR8 & !C & !Z)#		"JA    r
+		(IR15 & !IR14 & !IR13 & !IR12 & IR11 & !IR10 & IR9 & IR8 & (C # Z))#		"JBE    r
+		(IR15 & !IR14 & !IR13 & !IR12 & IR11 & IR10 & !IR9 & !IR8 & !C)#			"JAE
+		(IR15 & !IR14 & !IR13 & !IR12 & IR11 & IR10 & IR9 & IR8 & C)#				"JB
+		(IR15 & !IR14 & !IR13 & IR12 & IR11 & !IR10 & !IR9 & !IR8 & !S)#			"JNS   r
+		(IR15 & !IR14 & !IR13 & IR12 & IR11 & !IR10 & IR9 & IR8 & S)#				"JS   r
+		(IR15 & !IR14 & !IR13 & IR12 & IR11 & IR10 & !IR9 & !IR8 & !Z)#				"JNZ   r
+		(IR15 & !IR14 & !IR13 & IR12 & IR11 & IR10 & IR9 & IR8 & Z)#				"JZ   r
+		(IR15 & !IR14 & IR13 & !IR12 & IR11 & !IR10 & !IR9 & !IR8 & !V)#			"JNV  r
+		(IR15 & !IR14 & IR13 & !IR12 & IR11 & !IR10 & IR9 & IR8 & V)#				"JV  r
+		(IR15 & !IR14 & IR13 & !IR12 & IR11 & IR10 & !IR9 & !IR8 & ((S $ V) # Z))#	"JLE  r
+		(IR15 & !IR14 & IR13 & !IR12 & IR11 & IR10 & IR9 & IR8 & ((S !$ V) & !Z))#	"JG  r
+		(IR15 & !IR14 & IR13 & IR12 & IR11 & !IR10 & !IR9 & !IR8 & (S $ V) )#		"JL  r
+		(IR15 & !IR14 & IR13 & IR12 & IR11 & !IR10 & IR9 & IR8 & (S !$ V) );		"JGE  r	
+
+
+PMAc2 = RTS1#															"PC7:0 ¬ (S); S ¬ S + 1;
+		(RTS & (StateBits == Idle));									"PC12:8 ¬ (S); S ¬ S + 1
+
+PMAc3 = (!IR15 & !IR14 & !IR13 & IR12 & !IR10)#							"SBB   m
+																		"SBB   X, o
+																		"SBB   S, o
+																		"SBBI  k
+																		"SUB   m
+																		"SUB   X, o
+																		"SUB   S, o
+																		"SUBI  k
+		(!IR15 & IR14 & IR13 & !IR12 & !IR10)#							"ADC   m
+																		"ADC   X, o
+																		"ADC   S, o
+																		"ADCI  k
+																		"ADD   m
+																		"ADD   X, o
+																		"ADD   S, o
+																		"ADDI  k
+		(!IR15 & !IR14 & IR13 & IR12 & !IR11)#							"CMP   m
+																		"CMP   X, o
+																		"CMP   S, o
+																		"CMPI  k
+																		"XOR   m
+																		"XOR   X, o
+																		"XOR   S, o
+																		"XORI  k
+		(!IR15 & IR14 & !IR13 & !IR12 & !IR11 & IR10)#					"AND   m
+																		"AND   X, o
+																		"AND   S, o
+																		"ANDI  k
+		(!IR15 & IR14 & IR13 & IR12 & !IR11 & IR10)#					"OR    m
+																		"OR    X, o
+																		"OR    S, o
+																		"ORI   k	
+		(!IR15 & IR14 & !IR13 & !IR12 & IR11 & IR10)#					"TST   m
+																		"TST   X, o
+																		"TST   S, o
+																		"TSTI  k
+		(IR15 & !IR14 & !IR11)#											"LDD   m
+																		"LD    X + o
+																		"LD    X+ + o
+																		"LD    +X + o
+																		"LD    S + o
+																		"LD    S+ + o
+																		"LD    +S + o
+																		"IN    p
+																		"OUT   p
+																		"STD   m
+																		"ST    X + o
+																		"ST    X+ + o
+																		"ST    +X + o
+																		"ST    S + o
+																		"ST    S+ + o
+																		"ST    +S + o
+		(IR15 & !IR14 & IR11 & IR9 & !IR8)#								"LD X- + o
+																		"LD -X + o
+																		"LD S- + o
+																		"LD -S + o
+																		"ST X- + o
+																		"ST -X + o
+																		"ST S- + o
+																		"ST -S + o
+		(IR15 & !IR14 & !IR13 & !IR12 & IR11 & !IR10 & !IR9 & IR8)#		"LDI k	
+		(!IR15 & !IR14 & !IR13 & !IR12 & IR11 & IR10 & IR9 & !IR8)#		"PUSHF
+		(!IR15 & !IR14 & !IR13 & IR12 & IR11 & IR10 & IR9 & IR8 & IR7)#		"NOP			
+		(!IR15 & !IR14 & !IR13 & !IR12 & !IR11 & !IR10 & !IR9 & !IR8)#	"INC
+		(!IR15 & IR14 & IR13 & IR12 & IR11 & !IR10 & IR9 & IR8)#		"DEC
+		(!IR15 & IR14 & !IR13 & IR12 & !IR10 & !IR9 & !IR8)#			"RLC
+																		"LSL
+		(!IR15 & !IR14 & !IR13 & !IR12 & !IR11 & !IR10 & IR9 & !IR8)# 	"POPF
+		(!IR15 & !IR14 & IR13 & !IR12)#									"NEG
+																		"NOT
+		(IR15 & !IR14 & !IR13 & !IR12 & IR11 & !IR10 & !IR9 & !IR8 & !(!C & !Z))#	"JA    r
+		(IR15 & !IR14 & !IR13 & !IR12 & IR11 & !IR10 & IR9 & IR8 & !(C # Z))#		"JBE    r
+		(IR15 & !IR14 & !IR13 & !IR12 & IR11 & IR10 & !IR9 & !IR8 & C)#			"JAE
+		(IR15 & !IR14 & !IR13 & !IR12 & IR11 & IR10 & IR9 & IR8 & !C)#				"JB
+		(IR15 & !IR14 & !IR13 & IR12 & IR11 & !IR10 & !IR9 & !IR8 & S)#			"JNS   r
+		(IR15 & !IR14 & !IR13 & IR12 & IR11 & !IR10 & IR9 & IR8 & !S)#				"JS   r
+		(IR15 & !IR14 & !IR13 & IR12 & IR11 & IR10 & !IR9 & !IR8 & Z)#				"JNZ   r
+		(IR15 & !IR14 & !IR13 & IR12 & IR11 & IR10 & IR9 & IR8 & !Z)#				"JZ   r
+		(IR15 & !IR14 & IR13 & !IR12 & IR11 & !IR10 & !IR9 & !IR8 & V)#			"JNV  r
+		(IR15 & !IR14 & IR13 & !IR12 & IR11 & !IR10 & IR9 & IR8 & !V)#				"JV  r
+		(IR15 & !IR14 & IR13 & !IR12 & IR11 & IR10 & !IR9 & !IR8 & !((S $ V) # Z))#	"JLE  r
+		(IR15 & !IR14 & IR13 & !IR12 & IR11 & IR10 & IR9 & IR8 & !((S !$ V) & !Z))#	"JG  r
+		(IR15 & !IR14 & IR13 & IR12 & IR11 & !IR10 & !IR9 & !IR8 & !(S $ V) )#		"JL  r
+		(IR15 & !IR14 & IR13 & IR12 & IR11 & !IR10 & IR9 & IR8 & !(S !$ V) )#		"JGE  r
+		RTS0#																		"Increment PC
+		Call1;																		"Increment PC
+
+PMAc4 = (RTS & (StateBits == Idle));								"PC7:0 ¬ (S); S ¬ S + 1
+
+PMAc5 = Call0;														"S ¬ S – 1; (S) ¬ (PC + 1)12:8;
+												
+
+" Mux Selection Bit Equations
+
+DDSel0 = (!IR15 & !IR14 & !IR13 & !IR12 & IR11 & IR10 & IR9 & !IR8)#		"PUSHF
+		 Call0;																"S ¬ S – 1; (S) ¬ (PC + 1)12:8;
+
+DDSel1 = Call0#														"S ¬ S – 1; (S) ¬ (PC + 1)12:8;
+	 Call2;															" S ¬ S – 1; (S) ¬ (PC + 1)7:0; 
+																	" PC ¬ a
+
+ALUSel0 = 	(!IR15 & !IR11 & !IR10 & IR9 & IR8)#						"ADCI  k
+																		"CMPI  k
+																		"SUBI  k
+			(!IR15 & IR11 & !IR10 & IR9 & IR8)#							"ADDI  k
+																		"DEC
+																		"SBBI  k
+			(!IR15 & IR14 & !IR13 & !IR12 & IR10 & IR9 & IR8)#  		"ANDI  k
+																		"TSTI  k
+			(!IR15 & IR14 & IR13 & IR12 & !IR11 & IR10 & IR9 & IR8)# 	"ORI   k
+			(IR15 & !IR14 & !IR13 & !IR12 & IR11 & !IR10 & !IR9 & IR8)# "LDI   k
+			(!IR15 & !IR14 & IR13 & IR12 & !IR11 & IR10 & IR9 & IR8);	"XORI  k
+
+
+PMASel0 = RTS1#															"PC7:0 ¬ (S); S ¬ S + 1;
+		  (RTS & (StateBits == Idle));									"PC12:8 ¬ (S); S ¬ S + 1
+
+" READ, WRITE, and IO Signals
+RD = 	((!IR15 & IR14 & IR13 & !IR12 & !IR11 & !IR10 & !IR9)#		"ADC(m)
+																	"ADC X,o
+	(!IR15 & IR14 & IR13 & !IR12 & !IR11 & !IR10 & IR9 & !IR8)#		"ADC S,o
+	(!IR15 & IR14 & IR13 & !IR12 & IR11 & !IR10 & !IR9)#			"ADD(m)
+																	"ADD X,o
+		(!IR15 & IR14 & IR13 & !IR12 & IR11 & !IR10 & IR9 & !IR8)#		"ADD S,o
+		(!IR15 & IR14 & !IR13 & !IR12 & !IR11 & IR10 & !IR9)#			"AND (m)
+																		"AND X,o
+		(!IR15 & IR14 & !IR13 & !IR12 & !IR11 & IR10 & IR9 & !IR8)#		"AND S,o
+		(!IR15 & !IR14 & IR13 & IR12 & !IR11 & !IR10 & !IR9)#			"CMP (m)
+																		"CMP X,o
+		(!IR15 & !IR14 & IR13 & IR12 & !IR11 & !IR10 & IR9 & !IR8)#		"CMP S,o
+		(!IR15 & IR14 & IR13 & IR12 & !IR11 & IR10 & !IR9)#				"OR (m)
+																		"OR X,o
+		(!IR15 & IR14 & IR13 & IR12 & !IR11 & IR10 & IR9 & !IR8)#		"OR S,o
+		(!IR15 & !IR14 & !IR13 & IR12 & !IR11 & !IR10 & !IR9)#			"SUB (m)
+																		"SUB X,o
+		(!IR15 & !IR14 & !IR13 & IR12 & !IR11 & !IR10 & IR9 & !IR8)#	"SUB S,o
+		(!IR15 & !IR14 & !IR13 & IR12 & IR11 & !IR10 & !IR9)#			"SBB (m)
+																		"SBB X,o
+		(!IR15 & !IR14 & !IR13 & IR12 & IR11 & !IR10 & IR9 & !IR8)#		"SBB S,o
+		(!IR15 & IR14 & !IR13 & !IR12 & IR11 & IR10 & !IR9)#			"TST (m)
+																		"TST X,o
+		(!IR15 & IR14 & !IR13 & !IR12 & IR11 & IR10 & IR9 & !IR8)#		"TST S,o
+		(!IR15 & !IR14 & IR13 & IR12 & !IR11 & IR10 & !IR9)#			"XOR (m)
+																		"XOR X,o
+		(!IR15 & !IR14 & IR13 & IR12 & !IR11 & IR10 & IR9 & !IR8)#		"XOR S,o
+		(IR15 & !IR14 & !IR13 & !IR11 & !IR10)#							"LDD (m)
+																		"LD S + o
+																		"LD S+ + o
+																		"LD +S + o
+																		"IN p
+		(IR15 & !IR14 & !IR13 & IR11 & IR9 & !IR8)#						"LD X- + o
+																		"LD -X + o
+																		"LD S- + o
+																		"LD -S + o
+		(IR15 & !IR14 & !IR13 & !IR11 & IR10 & IR9)#					"LD X + o
+																		"LD X+ + o
+																		"LDn+X + o
+		(!IR15 & !IR14 & !IR13 & !IR12 & !IR11 & !IR10 & IR9 & !IR8)#	"POPF
+		(RTS & (StateBits == Idle))#									"PC7:0 ¬ (S); S ¬ S + 1;
+		RTS1)															"PC12:8 ¬ (S); S ¬ S + 1
+		& !Clock;														"Read happens when clock is low
+
+
+
+	WR = 	((IR15 & !IR14 & IR13 & !IR11)#									"STD m
+																			"ST X + o
+																			"ST X+ + o
+																			"ST +X + o
+																			"ST S + o
+																			"ST S+ + o
+																			"ST +S + o
+																			"OUTp
+			(IR15 & !IR14 & IR13 & IR11 & IR9 & !IR8)#						"ST X- + o
+																			"ST -X + o
+																			"ST S- + o
+																			"ST -S + o
+			(!IR15 & !IR14 & !IR13 & !IR12 & IR11)#							"PUSHF
+			Call2#															" S ¬ S – 1; (S) ¬ (PC + 1)7:0; 
+																			" PC ¬ a
+			Call0)															"S ¬ S – 1; (S) ¬ (PC + 1)12:8;
+			& !Clock;														"Write happens when clock is low
+
+	IO = (IR15 & !IR14 & IR12 & !IR11 & !IR10 & !IR9 & !IR8);		"INp
+																	"OUTp
+
+
+END ControlAccess
+
+

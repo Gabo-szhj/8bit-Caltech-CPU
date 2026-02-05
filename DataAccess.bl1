@@ -1,0 +1,453 @@
+#$ TOOL ispLEVER Classic 2.1.00.02.49.20
+#$ DATE Sat Mar 22 02:05:33 2025
+#$ TITLE Data Memory Access Unit Design
+#$ MODULE dataaccess
+#$ JEDECFILE dataaccess
+#$ PINS 41 Offset7 Offset6 Offset5 Offset4 Offset3 Offset2 Offset1 Offset0 Sel1 Sel0 \
+#  SelX SelS SelCarry SelPre SelF Clock Reset XReg7 XReg6 XReg5 XReg4 XReg3 XReg2 XReg1 XReg0 \
+#  SReg7 SReg6 SReg5 SReg4 SReg3 SReg2 SReg1 SReg0 DataAddr7 DataAddr6 DataAddr5 DataAddr4 \
+#  DataAddr3 DataAddr2 DataAddr1 DataAddr0
+#$ NODES 57 S7 S6 S5 S4 S3 S2 S1 S0 P7 P6 P5 P4 P3 P2 P1 P0 F7 F6 F5 F4 F3 F2 F1 F0 IncC7 IncC6 IncC5 \
+#  IncC4 IncC3 IncC2 IncC1 IncC0 Carry8 Carry7 Carry6 Carry5 Carry4 Carry3 Carry2 Carry1 \
+#  Carry0 XO7 XO6 XO5 XO4 XO3 XO2 XO1 XO0 SO7 SO6 SO5 SO4 SO3 SO2 SO1 SO0
+#$ INTERFACE dataaccess  41 Clock'i'  Offset0'i'  Offset1'i'  Offset2'i'  Offset3'i'  Offset4'i'  Offset5'i'  \
+#  Offset6'i'  Offset7'i'  Reset'i'  Sel0'i'  Sel1'i'  SelCarry'i'  SelF'i'  SelPre'i'  SelS'i'  SelX'i'  DataAddr0'o'  DataAddr1'o'  \
+#  DataAddr2'o'  DataAddr3'o'  DataAddr4'o'  DataAddr5'o'  DataAddr6'o'  DataAddr7'o'  SReg0'o'  SReg1'o'  SReg2'o'  SReg3'o'  \
+#  SReg4'o'  SReg5'o'  SReg6'o'  SReg7'o'  XReg0'o'  XReg1'o'  XReg2'o'  XReg3'o'  XReg4'o'  XReg5'o'  XReg6'o'  XReg7'o' 
+.model dataaccess
+.inputs Clock.BLIF Reset.BLIF XReg7.BLIF Sel1.BLIF Sel0.BLIF SReg7.BLIF \
+XReg6.BLIF SReg6.BLIF XReg5.BLIF SReg5.BLIF XReg4.BLIF SReg4.BLIF XReg3.BLIF \
+SReg3.BLIF XReg2.BLIF SReg2.BLIF XReg1.BLIF SReg1.BLIF XReg0.BLIF SReg0.BLIF \
+Offset7.BLIF SelF.BLIF Offset6.BLIF Offset5.BLIF Offset4.BLIF Offset3.BLIF \
+Offset2.BLIF Offset1.BLIF Offset0.BLIF S7.BLIF SelCarry.BLIF IncC6.BLIF \
+SelX.BLIF S6.BLIF IncC5.BLIF S5.BLIF IncC4.BLIF S4.BLIF IncC3.BLIF S3.BLIF \
+IncC2.BLIF S2.BLIF IncC1.BLIF S1.BLIF IncC0.BLIF S0.BLIF XO7.BLIF XO6.BLIF \
+XO5.BLIF XO4.BLIF XO3.BLIF XO2.BLIF XO1.BLIF XO0.BLIF SelS.BLIF SO7.BLIF \
+SO6.BLIF SO5.BLIF SO4.BLIF SO3.BLIF SO2.BLIF SO1.BLIF SO0.BLIF SelPre.BLIF \
+P7.BLIF F7.BLIF Carry7.BLIF P6.BLIF F6.BLIF Carry6.BLIF P5.BLIF F5.BLIF \
+Carry5.BLIF P4.BLIF F4.BLIF Carry4.BLIF P3.BLIF F3.BLIF Carry3.BLIF P2.BLIF \
+F2.BLIF Carry2.BLIF P1.BLIF F1.BLIF Carry1.BLIF P0.BLIF F0.BLIF Carry0.BLIF
+.outputs DataAddr7 DataAddr6 DataAddr5 DataAddr4 DataAddr3 DataAddr2 DataAddr1 \
+DataAddr0 S7 S6 S5 S4 S3 S2 S1 S0 P7 P6 P5 P4 P3 P2 P1 P0 F7 F6 F5 F4 F3 F2 F1 \
+F0 IncC7 IncC6 IncC5 IncC4 IncC3 IncC2 IncC1 IncC0 Carry8 Carry7 Carry6 Carry5 \
+Carry4 Carry3 Carry2 Carry1 Carry0 XO7 XO6 XO5 XO4 XO3 XO2 XO1 XO0 SO7 SO6 SO5 \
+SO4 SO3 SO2 SO1 SO0 XReg7.C XReg6.C XReg5.C XReg4.C XReg3.C XReg2.C XReg1.C \
+XReg0.C XReg7.CLR XReg6.CLR XReg5.CLR XReg4.CLR XReg3.CLR XReg2.CLR XReg1.CLR \
+XReg0.CLR SReg7.C SReg6.C SReg5.C SReg4.C SReg3.C SReg2.C SReg1.C SReg0.C \
+SReg7.CLR SReg6.CLR SReg5.CLR SReg4.CLR SReg3.CLR SReg2.CLR SReg1.CLR \
+SReg0.CLR XReg7.REG XReg6.REG XReg5.REG XReg4.REG XReg3.REG XReg2.REG \
+XReg1.REG XReg0.REG SReg7.REG SReg6.REG SReg5.REG SReg4.REG SReg3.REG \
+SReg2.REG SReg1.REG SReg0.REG
+.names P7.BLIF F7.BLIF Carry7.BLIF DataAddr7
+111 1
+001 1
+010 1
+100 1
+.names P6.BLIF F6.BLIF Carry6.BLIF DataAddr6
+111 1
+001 1
+010 1
+100 1
+.names P5.BLIF F5.BLIF Carry5.BLIF DataAddr5
+111 1
+001 1
+010 1
+100 1
+.names P4.BLIF F4.BLIF Carry4.BLIF DataAddr4
+111 1
+001 1
+010 1
+100 1
+.names P3.BLIF F3.BLIF Carry3.BLIF DataAddr3
+111 1
+001 1
+010 1
+100 1
+.names P2.BLIF F2.BLIF Carry2.BLIF DataAddr2
+111 1
+001 1
+010 1
+100 1
+.names P1.BLIF F1.BLIF Carry1.BLIF DataAddr1
+111 1
+001 1
+010 1
+100 1
+.names P0.BLIF F0.BLIF Carry0.BLIF DataAddr0
+111 1
+001 1
+010 1
+100 1
+.names XReg7.BLIF Sel1.BLIF Sel0.BLIF SReg7.BLIF S7
+100- 1
+-011 1
+.names Sel1.BLIF Sel0.BLIF XReg6.BLIF SReg6.BLIF S6
+001- 1
+01-1 1
+.names Sel1.BLIF Sel0.BLIF XReg5.BLIF SReg5.BLIF S5
+001- 1
+01-1 1
+.names Sel1.BLIF Sel0.BLIF XReg4.BLIF SReg4.BLIF S4
+001- 1
+01-1 1
+.names Sel1.BLIF Sel0.BLIF XReg3.BLIF SReg3.BLIF S3
+001- 1
+01-1 1
+.names Sel1.BLIF Sel0.BLIF XReg2.BLIF SReg2.BLIF S2
+001- 1
+01-1 1
+.names Sel1.BLIF Sel0.BLIF XReg1.BLIF SReg1.BLIF S1
+001- 1
+01-1 1
+.names Sel1.BLIF Sel0.BLIF XReg0.BLIF SReg0.BLIF S0
+001- 1
+01-1 1
+.names S7.BLIF SelX.BLIF XO7.BLIF SelS.BLIF SO7.BLIF SelPre.BLIF P7
+1----0 1
+-110-1 1
+-0-111 1
+.names SelX.BLIF S6.BLIF XO6.BLIF SelS.BLIF SO6.BLIF SelPre.BLIF P6
+-1---0 1
+1-10-1 1
+0--111 1
+.names SelX.BLIF S5.BLIF XO5.BLIF SelS.BLIF SO5.BLIF SelPre.BLIF P5
+-1---0 1
+1-10-1 1
+0--111 1
+.names SelX.BLIF S4.BLIF XO4.BLIF SelS.BLIF SO4.BLIF SelPre.BLIF P4
+-1---0 1
+1-10-1 1
+0--111 1
+.names SelX.BLIF S3.BLIF XO3.BLIF SelS.BLIF SO3.BLIF SelPre.BLIF P3
+-1---0 1
+1-10-1 1
+0--111 1
+.names SelX.BLIF S2.BLIF XO2.BLIF SelS.BLIF SO2.BLIF SelPre.BLIF P2
+-1---0 1
+1-10-1 1
+0--111 1
+.names SelX.BLIF S1.BLIF XO1.BLIF SelS.BLIF SO1.BLIF SelPre.BLIF P1
+-1---0 1
+1-10-1 1
+0--111 1
+.names SelX.BLIF S0.BLIF XO0.BLIF SelS.BLIF SO0.BLIF SelPre.BLIF P0
+-1---0 1
+1-10-1 1
+0--111 1
+.names Offset7.BLIF SelF.BLIF F7
+10 1
+.names SelF.BLIF Offset6.BLIF F6
+01 1
+.names SelF.BLIF Offset5.BLIF F5
+01 1
+.names SelF.BLIF Offset4.BLIF F4
+01 1
+.names SelF.BLIF Offset3.BLIF F3
+01 1
+.names SelF.BLIF Offset2.BLIF F2
+01 1
+.names SelF.BLIF Offset1.BLIF F1
+01 1
+.names SelF.BLIF Offset0.BLIF F0
+01 1
+.names S7.BLIF SelCarry.BLIF IncC6.BLIF IncC7
+10- 1
+1-1 1
+-01 1
+.names SelCarry.BLIF S6.BLIF IncC5.BLIF IncC6
+01- 1
+0-1 1
+-11 1
+.names SelCarry.BLIF S5.BLIF IncC4.BLIF IncC5
+01- 1
+0-1 1
+-11 1
+.names SelCarry.BLIF S4.BLIF IncC3.BLIF IncC4
+01- 1
+0-1 1
+-11 1
+.names SelCarry.BLIF S3.BLIF IncC2.BLIF IncC3
+01- 1
+0-1 1
+-11 1
+.names SelCarry.BLIF S2.BLIF IncC1.BLIF IncC2
+01- 1
+0-1 1
+-11 1
+.names SelCarry.BLIF S1.BLIF IncC0.BLIF IncC1
+01- 1
+0-1 1
+-11 1
+.names SelCarry.BLIF S0.BLIF IncC0
+11 1
+01 1
+.names P7.BLIF F7.BLIF Carry7.BLIF Carry8
+11- 1
+1-1 1
+-11 1
+.names P6.BLIF F6.BLIF Carry6.BLIF Carry7
+11- 1
+1-1 1
+-11 1
+.names P5.BLIF F5.BLIF Carry5.BLIF Carry6
+11- 1
+1-1 1
+-11 1
+.names P4.BLIF F4.BLIF Carry4.BLIF Carry5
+11- 1
+1-1 1
+-11 1
+.names P3.BLIF F3.BLIF Carry3.BLIF Carry4
+11- 1
+1-1 1
+-11 1
+.names P2.BLIF F2.BLIF Carry2.BLIF Carry3
+11- 1
+1-1 1
+-11 1
+.names P1.BLIF F1.BLIF Carry1.BLIF Carry2
+11- 1
+1-1 1
+-11 1
+.names P0.BLIF F0.BLIF Carry0.BLIF Carry1
+11- 1
+1-1 1
+-11 1
+.names Carry0
+.names XReg7.BLIF S7.BLIF SelCarry.BLIF IncC6.BLIF SelX.BLIF XO7
+1---0 1
+-0111 1
+-1011 1
+-1101 1
+-0001 1
+.names XReg6.BLIF SelCarry.BLIF SelX.BLIF S6.BLIF IncC5.BLIF XO6
+1-0-- 1
+-0111 1
+-1101 1
+-1110 1
+-0100 1
+.names XReg5.BLIF SelCarry.BLIF SelX.BLIF S5.BLIF IncC4.BLIF XO5
+1-0-- 1
+-0111 1
+-1101 1
+-1110 1
+-0100 1
+.names XReg4.BLIF SelCarry.BLIF SelX.BLIF S4.BLIF IncC3.BLIF XO4
+1-0-- 1
+-0111 1
+-1101 1
+-1110 1
+-0100 1
+.names XReg3.BLIF SelCarry.BLIF SelX.BLIF S3.BLIF IncC2.BLIF XO3
+1-0-- 1
+-0111 1
+-1101 1
+-1110 1
+-0100 1
+.names XReg2.BLIF SelCarry.BLIF SelX.BLIF S2.BLIF IncC1.BLIF XO2
+1-0-- 1
+-0111 1
+-1101 1
+-1110 1
+-0100 1
+.names XReg1.BLIF SelCarry.BLIF SelX.BLIF S1.BLIF IncC0.BLIF XO1
+1-0-- 1
+-0111 1
+-1101 1
+-1110 1
+-0100 1
+.names XReg0.BLIF SelCarry.BLIF SelX.BLIF S0.BLIF XO0
+1-0- 1
+-110 1
+-010 1
+.names SReg7.BLIF S7.BLIF SelCarry.BLIF IncC6.BLIF SelS.BLIF SO7
+1---0 1
+-0111 1
+-1011 1
+-1101 1
+-0001 1
+.names SReg6.BLIF SelCarry.BLIF S6.BLIF IncC5.BLIF SelS.BLIF SO6
+1---0 1
+-0111 1
+-1011 1
+-1101 1
+-0001 1
+.names SReg5.BLIF SelCarry.BLIF S5.BLIF IncC4.BLIF SelS.BLIF SO5
+1---0 1
+-0111 1
+-1011 1
+-1101 1
+-0001 1
+.names SReg4.BLIF SelCarry.BLIF S4.BLIF IncC3.BLIF SelS.BLIF SO4
+1---0 1
+-0111 1
+-1011 1
+-1101 1
+-0001 1
+.names SReg3.BLIF SelCarry.BLIF S3.BLIF IncC2.BLIF SelS.BLIF SO3
+1---0 1
+-0111 1
+-1011 1
+-1101 1
+-0001 1
+.names SReg2.BLIF SelCarry.BLIF S2.BLIF IncC1.BLIF SelS.BLIF SO2
+1---0 1
+-0111 1
+-1011 1
+-1101 1
+-0001 1
+.names SReg1.BLIF SelCarry.BLIF S1.BLIF IncC0.BLIF SelS.BLIF SO1
+1---0 1
+-0111 1
+-1011 1
+-1101 1
+-0001 1
+.names SReg0.BLIF SelCarry.BLIF S0.BLIF SelS.BLIF SO0
+1--0 1
+-101 1
+-001 1
+.names Clock.BLIF XReg7.C
+1 1
+0 0
+.names Clock.BLIF XReg6.C
+1 1
+0 0
+.names Clock.BLIF XReg5.C
+1 1
+0 0
+.names Clock.BLIF XReg4.C
+1 1
+0 0
+.names Clock.BLIF XReg3.C
+1 1
+0 0
+.names Clock.BLIF XReg2.C
+1 1
+0 0
+.names Clock.BLIF XReg1.C
+1 1
+0 0
+.names Clock.BLIF XReg0.C
+1 1
+0 0
+.names Reset.BLIF XReg7.CLR
+1 1
+0 0
+.names Reset.BLIF XReg6.CLR
+1 1
+0 0
+.names Reset.BLIF XReg5.CLR
+1 1
+0 0
+.names Reset.BLIF XReg4.CLR
+1 1
+0 0
+.names Reset.BLIF XReg3.CLR
+1 1
+0 0
+.names Reset.BLIF XReg2.CLR
+1 1
+0 0
+.names Reset.BLIF XReg1.CLR
+1 1
+0 0
+.names Reset.BLIF XReg0.CLR
+1 1
+0 0
+.names Clock.BLIF SReg7.C
+1 1
+0 0
+.names Clock.BLIF SReg6.C
+1 1
+0 0
+.names Clock.BLIF SReg5.C
+1 1
+0 0
+.names Clock.BLIF SReg4.C
+1 1
+0 0
+.names Clock.BLIF SReg3.C
+1 1
+0 0
+.names Clock.BLIF SReg2.C
+1 1
+0 0
+.names Clock.BLIF SReg1.C
+1 1
+0 0
+.names Clock.BLIF SReg0.C
+1 1
+0 0
+.names Reset.BLIF SReg7.CLR
+1 1
+0 0
+.names Reset.BLIF SReg6.CLR
+1 1
+0 0
+.names Reset.BLIF SReg5.CLR
+1 1
+0 0
+.names Reset.BLIF SReg4.CLR
+1 1
+0 0
+.names Reset.BLIF SReg3.CLR
+1 1
+0 0
+.names Reset.BLIF SReg2.CLR
+1 1
+0 0
+.names Reset.BLIF SReg1.CLR
+1 1
+0 0
+.names Reset.BLIF SReg0.CLR
+1 1
+0 0
+.names XO7.BLIF XReg7.REG
+1 1
+0 0
+.names XO6.BLIF XReg6.REG
+1 1
+0 0
+.names XO5.BLIF XReg5.REG
+1 1
+0 0
+.names XO4.BLIF XReg4.REG
+1 1
+0 0
+.names XO3.BLIF XReg3.REG
+1 1
+0 0
+.names XO2.BLIF XReg2.REG
+1 1
+0 0
+.names XO1.BLIF XReg1.REG
+1 1
+0 0
+.names XO0.BLIF XReg0.REG
+1 1
+0 0
+.names SO7.BLIF SReg7.REG
+1 1
+0 0
+.names SO6.BLIF SReg6.REG
+1 1
+0 0
+.names SO5.BLIF SReg5.REG
+1 1
+0 0
+.names SO4.BLIF SReg4.REG
+1 1
+0 0
+.names SO3.BLIF SReg3.REG
+1 1
+0 0
+.names SO2.BLIF SReg2.REG
+1 1
+0 0
+.names SO1.BLIF SReg1.REG
+1 1
+0 0
+.names SO0.BLIF SReg0.REG
+1 1
+0 0
+.end

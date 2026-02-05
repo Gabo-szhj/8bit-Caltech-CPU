@@ -1,0 +1,5 @@
+. CPU cputemplate.abl "d:\ee 10a\hw10\cputemplate.abl"
+ALUnit ALU gaboalu.abl "d:\ee 10a\hw10\gaboalu.abl"
+DAUnit DataAccess gabodau.abl "d:\ee 10a\hw10\gabodau.abl"
+CTLUnit ControlAccess controlgabo.abl "d:\ee 10a\hw10\controlgabo.abl"
+PAUnit Programaccess "pma design (1).abl" "d:\ee 10a\hw10\pma design (1).abl"

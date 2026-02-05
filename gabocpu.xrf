@@ -1,0 +1,154 @@
+Signal Name Cross Reference File
+
+ispLEVER Classic 2.1.00.02.49.20
+
+Design 'gabocpu' created Sat Mar 22 16:53:04 2025
+
+Title:  Caltech10 CPU
+
+ LEGEND:  '>'  Functional Block Port Separator
+          '/'  Hierarchy Path Separator
+          '@'  Automatically Generated Node
+
+
+Short Name                              Hierarchical Name
+----------                              -----------------
+F0_ALUSel0                           	CTLUnit>ALUSel0
+F0_ALUc0                             	CTLUnit>ALUc0
+F0_ALUc1                             	CTLUnit>ALUc1
+F0_ALUc10                            	CTLUnit>ALUc10
+F0_ALUc11                            	CTLUnit>ALUc11
+F0_ALUc12                            	CTLUnit>ALUc12
+F0_ALUc2                             	CTLUnit>ALUc2
+F0_ALUc3                             	CTLUnit>ALUc3
+F0_ALUc4                             	CTLUnit>ALUc4
+F0_ALUc6                             	CTLUnit>ALUc6
+F0_ALUc7                             	CTLUnit>ALUc7
+F0_ALUc8                             	CTLUnit>ALUc8
+F0_ALUc9                             	CTLUnit>ALUc9
+F0_DAUc0                             	CTLUnit>DAUc0
+F0_DAUc1                             	CTLUnit>DAUc1
+F0_DAUc2                             	CTLUnit>DAUc2
+F0_DAUc3                             	CTLUnit>DAUc3
+F0_DAUc4                             	CTLUnit>DAUc4
+F0_DAUc5                             	CTLUnit>DAUc5
+F0_DAUc6                             	CTLUnit>DAUc6
+F0_DDSel0                            	CTLUnit>DDSel0
+F0_DDSel1                            	CTLUnit>DDSel1
+F0_IR0                               	CTLUnit>IR0
+F0_IR1                               	CTLUnit>IR1
+F0_IR10                              	CTLUnit>IR10
+F0_IR11                              	CTLUnit>IR11
+F0_IR12                              	CTLUnit>IR12
+F0_IR13                              	CTLUnit>IR13
+F0_IR14                              	CTLUnit>IR14
+F0_IR15                              	CTLUnit>IR15
+F0_IR2                               	CTLUnit>IR2
+F0_IR3                               	CTLUnit>IR3
+F0_IR4                               	CTLUnit>IR4
+F0_IR5                               	CTLUnit>IR5
+F0_IR6                               	CTLUnit>IR6
+F0_IR7                               	CTLUnit>IR7
+F0_IR8                               	CTLUnit>IR8
+F0_IR9                               	CTLUnit>IR9
+F0_PMAc1                             	CTLUnit>PMAc1
+F0_PMAc3                             	CTLUnit>PMAc3
+F0_PMAc5                             	CTLUnit>PMAc5
+F0_WR                                	CTLUnit>WR
+F1_Call1                             	CTLUnit/Call1
+F1_Call2                             	CTLUnit/Call2
+F1_HoldIR                            	CTLUnit/HoldIR
+F1_RTS                               	CTLUnit/RTS
+F1_RTS0                              	CTLUnit/RTS0
+F1_RTS1                              	CTLUnit/RTS1
+P0_Carry1                            	PAUnit/Carry1
+P0_Carry10                           	PAUnit/Carry10
+P0_Carry11                           	PAUnit/Carry11
+P0_Carry2                            	PAUnit/Carry2
+P0_Carry3                            	PAUnit/Carry3
+P0_Carry4                            	PAUnit/Carry4
+P0_Carry5                            	PAUnit/Carry5
+P0_Carry6                            	PAUnit/Carry6
+P0_Carry7                            	PAUnit/Carry7
+P0_Carry8                            	PAUnit/Carry8
+P0_Carry9                            	PAUnit/Carry9
+P0_LoadOut0                          	PAUnit/LoadOut0
+P0_LoadOut1                          	PAUnit/LoadOut1
+P0_LoadOut10                         	PAUnit/LoadOut10
+P0_LoadOut11                         	PAUnit/LoadOut11
+P0_LoadOut12                         	PAUnit/LoadOut12
+P0_LoadOut2                          	PAUnit/LoadOut2
+P0_LoadOut3                          	PAUnit/LoadOut3
+P0_LoadOut4                          	PAUnit/LoadOut4
+P0_LoadOut5                          	PAUnit/LoadOut5
+P0_LoadOut6                          	PAUnit/LoadOut6
+P0_LoadOut7                          	PAUnit/LoadOut7
+P0_LoadOut8                          	PAUnit/LoadOut8
+P0_LoadOut9                          	PAUnit/LoadOut9
+P0_M0                                	PAUnit/M0
+P0_M1                                	PAUnit/M1
+P0_M10                               	PAUnit/M10
+P0_M11                               	PAUnit/M11
+P0_M12                               	PAUnit/M12
+P0_M2                                	PAUnit/M2
+P0_M3                                	PAUnit/M3
+P0_M4                                	PAUnit/M4
+P0_M5                                	PAUnit/M5
+P0_M6                                	PAUnit/M6
+P0_M7                                	PAUnit/M7
+P0_M8                                	PAUnit/M8
+P0_M9                                	PAUnit/M9
+V0_Carry2                            	DAUnit/Carry2
+V0_Carry3                            	DAUnit/Carry3
+V0_Carry4                            	DAUnit/Carry4
+V0_Carry5                            	DAUnit/Carry5
+V0_Carry6                            	DAUnit/Carry6
+V0_IncC1                             	DAUnit/IncC1
+V0_IncC2                             	DAUnit/IncC2
+V0_IncC3                             	DAUnit/IncC3
+V0_IncC4                             	DAUnit/IncC4
+V0_IncC5                             	DAUnit/IncC5
+V0_IncC6                             	DAUnit/IncC6
+V0_P0                                	DAUnit/P0
+V0_P1                                	DAUnit/P1
+V0_P2                                	DAUnit/P2
+V0_P3                                	DAUnit/P3
+V0_P4                                	DAUnit/P4
+V0_P5                                	DAUnit/P5
+V0_P6                                	DAUnit/P6
+V0_P7                                	DAUnit/P7
+V0_S0                                	DAUnit/S0
+V0_S1                                	DAUnit/S1
+V0_S2                                	DAUnit/S2
+V0_S3                                	DAUnit/S3
+V0_S4                                	DAUnit/S4
+V0_S5                                	DAUnit/S5
+V0_S6                                	DAUnit/S6
+V0_S7                                	DAUnit/S7
+X0_AddOut0                           	ALUnit/AddOut0
+X0_AddOut1                           	ALUnit/AddOut1
+X0_AddOut2                           	ALUnit/AddOut2
+X0_AddOut3                           	ALUnit/AddOut3
+X0_AddOut4                           	ALUnit/AddOut4
+X0_AddOut5                           	ALUnit/AddOut5
+X0_AddOut7                           	ALUnit/AddOut7
+X0_CInA                              	ALUnit/CInA
+X0_Carry0                            	ALUnit/Carry0
+X0_Carry1                            	ALUnit/Carry1
+X0_Carry2                            	ALUnit/Carry2
+X0_Carry3                            	ALUnit/Carry3
+X0_Carry4                            	ALUnit/Carry4
+X0_Carry5                            	ALUnit/Carry5
+X0_Carry6                            	ALUnit/Carry6
+X0_F0                                	ALUnit/F0
+X0_F1                                	ALUnit/F1
+X0_F2                                	ALUnit/F2
+X0_F3                                	ALUnit/F3
+X0_F4                                	ALUnit/F4
+X0_F5                                	ALUnit/F5
+X0_F6                                	ALUnit/F6
+X0_F7                                	ALUnit/F7
+X0_NewFlag4                          	ALUnit/NewFlag4
+X0_NewFlag5                          	ALUnit/NewFlag5
+X0_NewFlag6                          	ALUnit/NewFlag6
+X0_NewFlag7                          	ALUnit/NewFlag7

@@ -1,0 +1,12 @@
+Prefit Logic Optimizer (May 31 2012)  Sat Mar 22 16:55:17 2025
+
+C:\ispLEVER_Classic2_1\ispcpld\bin\prefit.exe -blif -inp gabocpu.bl4 -out gabocpu.bl5 -err automake.err -log gabocpu.log -mod CPU @gabocpu.l0 -gui -sc 
+<Note> F34000: buried node com_0 generated
+<Note> F34000: buried node com_1 generated
+<Note> F34000: buried node com_2 generated
+<Note> F34000: buried node com_3 generated
+Number of pins (IO)    :    82
+Number of outputs (MC) :   208
+Number of registers    :    66
+Number of logic pterms :   840
+C:\ispLEVER_Classic2_1\ispcpld\bin\prefit.exe complete - Time 1 seconds

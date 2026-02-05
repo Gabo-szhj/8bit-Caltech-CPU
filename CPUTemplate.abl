@@ -1,0 +1,257 @@
+MODULE      CPU
+TITLE      'Caltech10 CPU'
+
+
+" Description:  This is a top-level module for implementing the Caltech10 CPU.
+"               This module will instantiate and connect
+"               the ALU, DAU, PAU, and control unit modules with logic 
+"               equations and muxes. This CPU implementation can successfully 
+"               fit onto the LC4256V device and perform all CPU instruction
+"               including NEG, IN p, and OUT p.
+"
+" Inputs:         ProgramDB[15..0]  - the 16-bit program data bus
+"                 Reset             - system reset signal
+"                 Clock             - system clock
+"
+" I/O:            DataDB[7..0]      - the 8-bit data data bus
+"
+" Outputs:        ProgramAB[12..0]  - the 13-bit program address bus
+"                 DataAB[7..0]      - the 8-bit data address bus
+"                 RD                - read signal for the data data bus
+"                 WR                - write signal for the data data bus
+"                 IO                - memory (0) or I/O (1) is being accessed
+"
+" Status Outputs: Accum[7..0]       - the 8-bit accumulator
+"                 Flags[7..0]       - the 8-bit flag register
+"                 XReg[7..0]        - the 8-bit X register
+"                 SReg[7..0]        - the 8-bit S register
+"
+" Internal Signals: ALUin7..ALUin0      - 8-bit output from the ALU in mux acting as data in for the ALU
+"                   PMAin7..PMAin0      - 8-bit output from the PMA in mux acting as data in for the Program Memory Unit
+"                   IRs15..IRs0         - 16-bit instruction register from the control unit for offset input for other modules
+
+
+" Revision History:
+" 02/15/18   Glen George  Initial Revision
+" 01/05/21   Glen George  Updated comments
+" 03/15/25   Gabo Zhang   Added Interface for each module
+" 03/16/25   Gabo Zhang   Connected input and output for each module, RD, WR, IO Signals
+" 03/17/25   Gabo Zhang   Added input mux for Datadata bus, ALU data, and PMA offset
+" 03/18/25   Gabo Zhang   Added instruction register to input of modules
+" 03/21/25   Gabo Zhang   Fixed minor erros 
+" 03/22/25   Gabo Zhang   Fixed error in the PAU interface
+
+
+" Pin/Signal Declarations
+
+" Inputs
+
+ProgramDB15..ProgramDB0	pin;	"input  16-bit instruction data bus
+Reset           	pin;	"input  system reset signal
+Clock           	pin;	"input  system clock
+
+
+" I/O
+
+DataDB7..DataDB0	pin;	"I/O  8-bit Data data bus
+
+
+" Outputs
+
+ProgramAB12..ProgramAB0	pin;	"output  the 13-bit Program address bus
+DataAB7..DataAB0	pin;	"output  the 8-bit Data address bus
+RD			pin;	"output  read signal for the Data data bus
+WR			pin;	"output  write signal for the Data data bus
+IO			pin;	"output  accessing memory (0) or I/O (1)
+
+
+" Debugging/Status Outputs
+
+Accum7..Accum0		pin;	"the 8-bit accumulator
+Flags7..Flags0		pin;	"the flags (8 bits)
+XReg7..XReg0		pin;	"the 8-bit X register
+SReg7..SReg0		pin;	"the 8-bit S register
+
+" Internal signals
+
+ALUin7..ALUin0            node;  "node    8-bit output from the ALU in mux acting as data in for the ALU
+PMAin7..PMAin0            node;  "node    8-bit output from the PMA in mux acting as data in for the Program Memory Unit
+IRs15..IRs0               node;  "node    16-bit instruction register from the control unit as direct offset for other modules
+
+" declare the used modules
+
+" ALU Module
+ALU INTERFACE  (Data7..Data0,
+                 Sel3..Sel0, SelAS, SelA, SelAnd,SelC0, SelC1, SelSZ,SelVC, 
+                 SelCarry, SelPop, Reset, Clock
+                -> Accum7..Accum0, Flags7..Flags0);                             "interface for ALU
+
+
+" DAU Module
+DataAccess INTERFACE  (Offset7..Offset0,
+                       Sel1..Sel0, SelX, SelS, SelCarry, SelPre, SelF,  
+                       Reset, Clock
+                       -> DataAddr7..DataAddr0, XReg7..XReg0, SReg7..SReg0);    "interface for DAU
+
+
+" PAU Module
+ProgramAccess INTERFACE  (Offset7..Offset0, Direct12..Direct0,
+            Sel0, Sel1, Sel2, Sel3, LowerBit, Hold, 
+                          Reset, Clock
+                          -> ProgAddr12..ProgAddr0, PC12..PC0);                 "interface for PAU
+
+
+" CTL Module
+ControlAccess INTERFACE  (ProgramDB15..ProgramDB0, Clock, Reset, C, S, V, Z 
+                          -> ALUc12..ALUc0, DAUc6..DAUc0, PMAc5..PMAc0, RD, 
+                          WR, IO, DDSel1..DDSel0, ALUSel0, PMASel0, IR15..IR0); "interface for control unit
+
+
+
+
+" create instances of the modules
+
+ALUnit     FUNCTIONAL_BLOCK  ALU;               "ALU module instance creation
+DAUnit     FUNCTIONAL_BLOCK  DataAccess;        "DAU module instance creation
+PAUnit     FUNCTIONAL_BLOCK  ProgramAccess;     "PAU module instance creation
+CTLUnit    FUNCTIONAL_BLOCK  ControlAccess;     "CTLU module instance creation
+
+" Busses
+
+ProgramAB  =  [ProgramAB12..ProgramAB0];                "13-bit Program address bus
+ProgramDB  =  [ProgramDB15..ProgramDB0];                "16-bit Program data bus
+DataAB     =  [DataAB7..DataAB0];	                "8-bit Data address bus
+DataDB     =  [DataDB7..DataDB0];	                "8-bit Data data bus
+Accum      =  [Accum7..Accum0];                         "the 8-bit accumulator
+Flags     =   [Flags7..Flags0];                         "the flags (8 bits)
+KValue    =   [IRs7..IRs0];                             "8-bit immediate value from instruction register
+ALUin     =   [ALUin7..ALUin0];                         "the 8-bit output bus from the ALU in mux
+PMAin     =   [PMAin7..PMAin0];                         "the 8-bit output bus from the PAU in mux
+PChigh 	  =   [0, 0, 0, PAUnit.PC12..PAUnit.PC8];       "the loadin PC12..PC8 for the datadata bus mux (CALL)
+IRs       =   [IRs15..IRs0];                            "8-bit instruction register bus from control unit
+
+EQUATIONS
+
+IRs = [CTLUnit.IR15..CTLUnit.IR0];                      "connecting the instruction register from control unit to the IR bus on the top level module
+
+"DataData Bus Mux
+        
+DataDB = (Accum & !CTLUnit.DDSel1 & !CTLUnit.DDSel0) #                  " DDSel = 00 -> accumulator as DataDataBus
+         (Flags & !CTLUnit.DDSel1 & CTLUnit.DDSel0) #                   " DDSel = 01 -> flags as DataDataBus
+         (PAUnit.[PC7..PC0] &  CTLUnit.DDSel1 & !CTLUnit.DDSel0) #      " DDSel = 10 -> PC7..PC0 as DataDataBus
+         (PChigh &  CTLUnit.DDSel1 & CTLUnit.DDSel0);                   " DDSel = 00 -> PC12..PC8 as DataDataBus
+
+
+"ALU Data Mux
+
+ALUin = (DataDB & !CTLUnit.ALUSel0) #          " ALUSel = 0 -> Datadata Bus
+        (KValue & CTLUnit.ALUSel0);            " ALUSel = 1 -> first 8 bit of the instruction bus as offset
+
+
+"PMA Offset Mux
+
+PMAin = (KValue & !CTLUnit.PMASel0) #          " PMASel = 0 -> first 8 bit of the instruction bus as offset
+        (DataDB & CTLUnit.PMASel0);            " PMASel = 1 -> Datadata Bus
+
+" ALU Inputs
+ALUnit.[Data7..Data0]  =  ALUin;       "connect the output from the ALU data mux to the ALU imput
+
+" ALU Control Inputs
+ALUnit.Sel0      =  CTLUnit.ALUc0;     "mux select source 1 for F-block from control unit
+ALUnit.Sel1      =  CTLUnit.ALUc1;     "mux select source 2 for F-block from control unit
+ALUnit.Sel2      =  CTLUnit.ALUc2;     "mux select source 3 for F-block from control unit
+ALUnit.Sel3      =  CTLUnit.ALUc3;     "mux select source 4 for F-block from control unit
+ALUnit.SelAnd    =  CTLUnit.ALUc4;     "signal input into AND gate from control unit
+ALUnit.SelAS     =  CTLUnit.ALUc5;     "adder/shifter mux select from control unit
+ALUnit.SelC0     =  CTLUnit.ALUc6;     "Carryin mux select source 1 from control unit
+ALUnit.SelC1     =  CTLUnit.ALUc7;     "Carryin mux select source 2 from control unit
+ALUnit.SelA      =  CTLUnit.ALUc8;     "update A mux select from control unit
+ALUnit.SelSZ     =  CTLUnit.ALUc9;     "MASK signal for updating S & Z flags (1) from control unit
+ALUnit.SelVC     =  CTLUnit.ALUc10;    "MASK signal for updating V & C flags (1) from control unit
+ALUnit.SelCarry  =  CTLUnit.ALUc11;    "flag carryin mux select  from control unit
+ALUnit.SelPop    =  CTLUnit.ALUc12;    "flag MASK mux select  from control unit
+
+ALUnit.Reset  =  Reset;                 "ALU Reset Signal
+ALUnit.Clock  =  Clock;                 "ALU Clock Signal
+
+" ALU Outputs
+
+[Accum7..Accum0]  =  ALUnit.[Accum7..Accum0];   "connect accumulator from ALU to the top level module
+Flags  =  [ALUnit.Flags7..ALUnit.Flags0];       "connect flag computation from ALU to the top level module
+
+" Data Memory Access Unit Inputs
+
+DAUnit.[Offset7..Offset0]  =  KValue;           "connect first 8-bit of the IR to the offset of DAU
+
+
+
+" Data Memory Access Unit Control Inputs
+DAUnit.[Sel1..Sel0]     =  CTLUnit.[DAUc1..DAUc0];    	 " 2 control signals for source select mux from control unit
+DAUnit.SelX             =  CTLUnit.DAUc2;                " select signal to inc/dec X from control unit
+DAUnit.SelS             =  CTLUnit.DAUc3;                " select signal to inc/dec S from control unit
+DAUnit.SelCarry         =  CTLUnit.DAUc4;                " select signal increment (1) or decrement (0) from control unit
+DAUnit.SelPre           =  CTLUnit.DAUc5;                " control signal for pre (1) /post (0) select mux from control unit
+DAUnit.SelF             =  CTLUnit.DAUc6;                " control signal offset select mux from control unit
+
+DAUnit.Reset  =  Reset;                                  "DAU Reset Signal
+DAUnit.Clock  =  Clock;                                  "DAU Clock Signal
+
+" DAU Outputs
+
+DataAB  =  DAUnit.[DataAddr7..DataAddr0];
+[XReg7..XReg0]            =  DAUnit.[XReg7..XReg0];     "Connect X-register output from DAU to top level module
+[SReg7..SReg0]            =  DAUnit.[SReg7..SReg0];     "Connect S-register output from DAU to top level module
+
+" Program Memory Access Unit Inputs
+
+PAUnit.[Offset7..Offset0]   =  PMAin;                   "connect the output from the PAU data mux to the PAU imput
+PAUnit.[Direct12..Direct0]  =  [IRs12..IRs0];           "connect the first 13-bit of instruction register for direct jump
+
+" Program Memory Access Unit Control Inputs
+PAUnit.Sel0      =  CTLUnit.PMAc0;	  "mux select direct jump from control unit
+PAUnit.Sel1      =  CTLUnit.PMAc1;	  "mux select relative jump from control unit
+PAUnit.Sel2      =  CTLUnit.PMAc2;	  "mux select loading high/low bits from control unit
+PAUnit.Sel3      =  CTLUnit.PMAc3;	  "mux select ONE from control unit
+PAUnit.LowerBit  =  CTLUnit.PMAc4; 	  "load lower bit (1) or load higher bit (0) from control unit
+PAUnit.Hold      =  CTLUnit.PMAc5;	  "hold program address from control unit
+
+PAUnit.Reset  =  Reset;                   "PAU Reset Signal
+PAUnit.Clock  =  Clock;                   "PAU Clock Signal
+
+" PAU Outputs
+
+ProgramAB  =  PAUnit.[ProgAddr12..ProgAddr0];   "Connect program address bus from PAU to the top level moduel
+
+" Control Unit Inputs
+CTLUnit.[ProgramDB15..ProgramDB0] = [ProgramDB15..ProgramDB0];  "the program data bus for instructions input
+CTLUnit.C = ALUnit.Flags3;                                      "the carry flag computed from ALU
+CTLUnit.V = ALUnit.Flags2;                                      "the signed overflow flag comuputed from ALU
+CTLUnit.S = ALUnit.Flags1;                                      "the sign flag computed from ALU
+CTLUnit.Z = ALUnit.Flags0;                                      "the zero flag computed from ALU
+
+CTLUnit.Reset  =  Reset;                                        "control unit reset signal
+CTLUnit.Clock  =  Clock;                                        "control unit clock signal 
+
+" Control Unit Outputs
+RD = CTLUnit.RD;                "connect read signal from control unit to the top level module
+WR = CTLUnit.WR;                "connect write signal from control unit to the top level module
+IO = CTLUnit.IO;                "connect IO signal from control unit to the top level module
+
+
+" Data data bus is enabled when writing
+DataDB.OE  =  CTLUnit.WR;                      
+
+" most signals are always enabled
+ProgramAB.OE         =  ^h1FFF;
+DataAB.OE            =  ^hFF;
+RD.OE                =  1;
+WR.OE                =  1;
+IO.OE                =  1;
+[Accum7..Accum0].OE  =  ^hFF;
+[Flags7..Flags0].OE  =  ^hFF;
+[XReg7..XReg0].OE    =  ^hFF;
+[SReg7..SReg0].OE    =  ^hFF;
+
+
+
+END  CPU
