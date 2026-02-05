@@ -1,0 +1,20 @@
+JDF B
+// Created by Version 2.1 
+PROJECT GABOcpu
+DESIGN gabocpu Normal
+DEVKIT LC4256V-10T176I
+ENTRY ABEL/Schematic
+STIMULUS CPUStandard.abv
+MODULE pma design (1).abl
+MODSTYLE Programaccess Normal
+MODULE controlgabo.abl
+MODSTYLE ControlAccess Normal
+MODULE gaboalu.abl
+MODSTYLE ALU Normal
+MODULE cputemplate.abl
+MODSTYLE CPU Normal
+MODULE gabodau.abl
+MODSTYLE DataAccess Normal
+SYNTHESIS_TOOL Synplify
+SIMULATOR_TOOL ActiveHDL
+TOPMODULE CPU

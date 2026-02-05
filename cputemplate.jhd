@@ -1,0 +1,9 @@
+MODULE CPU
+	SUBMODULE alu
+		INSTANCE ALUnit
+	SUBMODULE dataaccess
+		INSTANCE DAUnit
+	SUBMODULE programaccess
+		INSTANCE PAUnit
+	SUBMODULE controlaccess
+		INSTANCE CTLUnit

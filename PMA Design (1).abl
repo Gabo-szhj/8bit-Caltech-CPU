@@ -1,0 +1,113 @@
+MODULE      Programaccess
+TITLE      'Program Memory Access Unit Design'
+
+
+" Description:  This file demonstrates the design of a program memory access unit. 
+"		The unit is capable of handling RTS instructures and take control signals.
+"		The output of the unit are the Program Address Bus(13-bits) and 
+"		Program Counter (13-bits)
+"
+" Inputs:       Offset[7..0]	 - 8-bit offset for relative jump displayed on the board
+"		Direct[12..0]	 - 13-bit direct load for direct jump displayed on the board
+"		Control[4..0] 	 - 5 control signals for mux selection and hold
+"		Clock		 - program counter clock
+"		Reset		 - program counter rest
+"		Sel0 		 - mux select MuxInA for direct jump
+"		Sel1 		 - mux select signed extended MuxInB for relative jump
+"		Sel2 		 - mux select lower 8 or upper 5 bit with MASK
+"		Sel3 		 - mux select ONE
+"		LowerBit	 - control signal for active high: loading the 8-bit of offset to lower 8-bit of program address
+"				   active low: load the lower 5 bit of offset to the upper 5 bit of program address
+"		Hold 		 - control signal to hold program address
+
+"
+" Outputs:      ProgAddr[12..0]	 - 13-bit program address displayed on the board
+"		PC[12..0]        - 13-bit program counter
+
+
+" Revision History:
+" 02/22/25   Gabo Zhang  Initial Revision (declaring pins and busses)
+" 02/24/25   Gabo Zhang  Updated logic equations and comments
+" 02/25/25   Gabo Zhang  Revised mux select signals and added muxin MASK
+" 03/22/25   Gabo Zhang  Revised comments
+
+
+" Pin/Signal Declarations
+
+" Inputs
+
+Offset7..Offset0  	pin; 			"input    8-bit offset for relative jump displayed on the board
+Direct12..Direct0 	pin; 			"input    13-bit direct load for direct jump displayed on the board
+Clock		     	pin; 			"input    program counter clock
+Reset		    	pin; 			"input	  program counter rest
+Sel0 			pin;			"input	  mux select 1st source
+Sel1 			pin;			"input    mux select 2nd source
+Sel2 			pin;			"input    mux select 3rd source
+Sel3 			pin;			"input    mux select 4th source
+LowerBit		pin;			"input    control signal for loading the 8-bit of offset to lower 8-bit of program address
+
+Hold 			pin;			"input	  control signal to hold program address
+
+
+" Output
+
+PC12..PC0         	pin ISTYPE 'REG,KEEP'; 	"output    13-bit program counter
+ProgAddr12..ProgAddr0	pin;			"output    13-bit program address displayed on the board
+
+
+" Intermediate Terms
+
+Carry12..Carry0         node	;  "node    carry bits
+M12..M0     		node;  "node    13-bit output from the mux
+LoadOut12..LoadOut0     node;  "node    13-bit output from the load AND gate
+
+
+" Busses/Vectors
+	
+MuxInA	 	= [Direct12..Direct0];							" input A to mux for direct jump
+MuxInB		= [Offset7, Offset7, Offset7, Offset7, Offset7, Offset7..Offset0];	" input B to mux for relative jump					
+MuxInhigh 	= [Offset4..Offset0, Offset7..Offset0];				" input high 5-bit to mux
+MuxOut 		= [M12..M0];								" Output from the mux
+PC 		= [PC12..PC0];								" PC bus
+CarryIn 	= [Carry11..Carry0, 0];							" Carryin for adder with first carry set to 0
+Carryout	= [Carry12..Carry0];							" Carryout for adder
+LoadOut 	= [LoadOut12..LoadOut0];						" Output from load AND gate
+
+
+" Constants
+ONE = [ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1 ];    "13-bit value of 1
+MASK = [ 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0];    "MASK for the load upper and lower bit of offset
+
+
+EQUATIONS
+
+PC.CLK = Clock;		" Run the PC clock
+PC.CLR = Reset;	" Reset the PC
+
+
+" The 13 x 5:1 mux
+
+MuxOut  =  ((MuxInA & Sel0) #         			" Sel0 -> Load MuxInA (Direct Jump) (done to fix error in code)
+           (MuxInB &  Sel1) #				" Sel1 -> Load MuxInB (Relative Jump)     
+	   (MuxInhigh & (MASK $ LowerBit) & Sel2)#	" Sel2 & UpperBit = 1 -> Load MuxInhigh (Load upper 5 byte)
+	   (ONE & Sel3)) & !Hold;			" Sel3 -> Load ONE (Incrementing)
+
+
+
+" The load check AND logic gate	   
+           
+LoadOut=  !((LowerBit) # (Sel0)) & PC;	"Clear PC if lowerbit is on or its direct jump
+
+
+
+" The adder
+
+PC := MuxOut $ LoadOut $ CarryIn;					" A 13-bit adder implementation
+Carryout = (MuxOut & LoadOut) # (CarryIn & (MuxOut # LoadOut));		" Updating carryout
+
+
+
+" Updating the program addresses
+[ProgAddr12..ProgAddr0] = PC;		" Show the result
+
+End Programaccess

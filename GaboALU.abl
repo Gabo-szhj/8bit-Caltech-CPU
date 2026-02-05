@@ -1,0 +1,177 @@
+MODULE      ALU
+INTERFACE  (Data7..Data0,
+                 Sel3..Sel0, SelAS, SelA, SelAnd,SelC0, SelC1, SelSZ,SelVC, SelCarry, SelPop,
+                Reset, Clock
+                -> Accum7..Accum0, Flags7..Flags0);
+TITLE      'Gabo ALU Design'
+
+
+
+" Description:  This file is the design of a ALU for the Caltech 10 CPU.
+"               The design includes an accumulator, status register, and ALU itself.
+"               The ALU is capable of performing all standard logic and arithmetic 
+"               operations which include Boolean operations, shifts, and rotates, 
+"               addition, subtraction, and comparison. The output are the accumulator 
+"               value and the flags generated based on the operations.
+"
+" Inputs:       Data7..Data0  	- 8-bit Data input
+"				Reset 			- Register reset from the board
+"				Clock 			- Register clock form the board
+"
+" Signals:		Sel3..Sel0 		- Select signals for the F-Block
+"				SelAS 			- 0 -> Adder Selection, 1-> Shifter Selection
+"				SelA 			- 0 -> Don't update Accum Values, 1-> Update Accum Values
+"				SelAnd 			- Signal input into AND gate to pass A or pass 0
+"				SelC0           - Select signals for the CarryIn mux for the adder
+"				SelC1           - Select signals for the CarryIn mux for the adder
+"                                                       SelC = 00 -> 0
+"                                                       SelC = 01 -> 1
+"                                                       SelC = 10 -> Flags3 (previous carry flag)
+"                                                       SelC = 11 -> !Flags3
+"				SelSZ           - Select signals in the MASK for updating S & Z flags
+"				SelVC           - Select signals in the MASK for updating V & C flags
+"				SelCarry        - Select signals for flag calculation 0 -> Carryout from adder, 1-> Carryout from shifter
+"				SelPop          - Select Signals to perform popf instruction for flag mask mux by passing in the ALU result
+"
+" Outputs:      Accum7..Accum0  - output 	8-bit accumulator   
+"				Flags3..Flags0	- 4-bit flag for C-O-V-Z generation
+"
+" Revision History:
+" 02/27/25   Gabo Zhang  Initial Revision with Pin Declaration
+" 02/28/25   Gabo Zhang  Inputted ALU equations
+" 03/01/25   Gabo Zhang  Inputted Flag generation & debugged
+" 03/22/25   Gabo Zhang  Revised comments
+
+
+
+" Pin/Signal Declarations
+
+" Inputs
+
+Data7..Data0  		pin; 				"input    8-bit Data input
+Reset 				pin; 				"input    Register reset from the board
+Clock 				pin; 				"input    Register clock form the board
+
+" Signals
+Sel3..Sel0 			pin;				"input	  Select signals for the F-Block
+SelAS 				pin;				"Input    Select signal for 2:1 mux 0 -> Adder Selection, 1-> Shifter Selection
+SelA 				pin;				"Input    Select signal for 2:1 mux 0 -> Keep Accum Values, 1-> Update Accum Values
+SelAnd 				pin; 				"input    Signal input into AND gate to pass A or pass 0
+SelC0               pin;                "input    Select signals for the CarryIn mux for the adder
+SelC1               pin;                "input    Select signals for the CarryIn mux for the adder
+SelSZ               pin;                "input 	  Select signals in the MASK for updating S & Z flags
+SelVC               pin;                "input 	  Select signals in the MASK for updating V & C flags
+SelCarry            pin;                "input    Select signals for flag calculation 0 -> Carryout from adder, 1-> Carryout from shifter
+SelPop              pin;                "input 	  Select Signals to perform popf instruction for flag mask mux by passing in the ALU result
+
+
+
+" Output
+
+Accum7..Accum0         	pin ISTYPE 'REG,KEEP'; 	"output 	8-bit accumulator   
+Flags7..Flags0			pin ISTYPE 'REG,KEEP';	"output     4-bit flag for C-O-V-Z
+
+
+" Intermediate Terms
+F7..F0     				node;  "node    8-bit output from the F-block and input to the adder
+Carry6..Carry0          node;  "node    Carry bits
+AddLoad7..AddLoad0   	node;  "node    8-bit output from the AND gate and the input to th adder
+AddOut7..AddOut0   		node;  "node    8-bit output from the adder and the input to the 2:1 mux to select adder output or shifter output
+ALoad7..ALoad0    		node;  "node    8-bit output from 2:1 mux for adder/shifter selection and input to 2:1 mux to choose to keep Accumulator value or update with Aload
+CInA         			node;  "node    Output from the 4:1 mux for carryin bit selection for the adder
+COutA        			node;  "node    Carry from the adder
+COutS         			node;  "node    Carry from the shifter
+NewFlag7..NewFlag0      node;  "node    The new flags calculated from the ALU result
+
+
+" Busses/Vectors
+A 			= [Accum7..Accum0];					" Accumulator bus
+B 			= [Data7..Data0];					" Data bus
+OldFlags 	= [Flags7..Flags0];					" Flags that are displayed onto the board					
+NewFlags	= [NewFlag7..NewFlag0];				" New flags generated from the ALU result				
+FOut 		= [F7..F0];							" Output from the F-Block
+CarryIn 	= [Carry6..Carry0, CInA];			" Carryin for adder with lowest bit set to the output of the Carryin mux
+Carryout	= [COutA, Carry6..Carry0];			" Carryout from the adder with the highest bit set to COutA (carry for ALU result)
+AddLoad 	= [AddLoad7..AddLoad0];				" Output from the AND gate and input into adder
+AddOut 		= [AddOut7..AddOut0];				" Output from the adder and input to the adder/shifter mux
+ALoad 		= [ALoad7..ALoad0];					" Output from the adder/shifter mux and input to the update accum mux
+PopfLoad 	= [ALoad7, 0, ALoad5, 0, ALoad3..ALoad0];					" Lower 4 bits of ALU result for popf instruction, input to the flag MASK mux
+MASK 		= [1, 1, 1, 1, SelVC, SelVC, SelSZ, SelSZ];		" The MASK to select updating V&C flag or S&Z flag or both
+
+" Constants
+ZERO = [0, 0, 0, 0, 0, 0, 0, 0];
+
+
+EQUATIONS "-----------------------------------------------------------------------
+
+A.CLK = Clock;				" Run the Accumulator clock
+A.CLR = Reset;				" Reset the Accumulator
+
+OldFlags.CLK = Clock;		" Run the flags clock
+OldFlags.CLR = Reset;		" Reset the flags
+
+
+" The F-block ---------------------------------------------------------------------
+
+FOut  = (Sel0 & !A & !B) #          " Sel = 1100 -> A
+        (Sel1 & !A &  B) #          " Sel = 0101 -> B
+        (Sel2 &  A & !B) #          " Sel = 1111 -> ONE
+        (Sel3 &  A &  B);           " Sel = 0000 -> ZERO
+        							" Sel = 0110 -> A XOR B
+        							" Sel = 1000 -> A AND B
+        							" Sel = 1110 -> A OR B
+
+" AND Gate ------------------------------------------------------------------------
+
+AddLoad = SelAnd & A;		" Choose to pass A or pass 0
+
+" 4:1 mux for adder carryin selection ---------------------------------------------
+
+CInA  = (0 & !SelC1 & !SelC0) #          " SelC = 00 -> 0
+        (1 & !SelC1 &  SelC0) #          " SelC = 01 -> 1
+        (Flags3 &  SelC1 & !SelC0) #     " SelC = 10 -> Flags3 (previous carry flag)
+        (!Flags3 &  SelC1 &  SelC0);     " SelC = 11 -> !Flags3
+
+" The adder to add the output from Fblock to the AND gate------------------------
+
+AddOut   = AddLoad $ FOut $ CarryIn;					" A 8-bit adder implementation
+Carryout = (AddLoad & FOut) # (CarryIn & (AddLoad # FOut));		" Updating carryout
+
+
+"mux choosing between adder and shift/rot -----------------------------------------
+
+ALoad  = (AddOut & !SelAS) #         	" SelAS = 0 -> AddOut (output from adder)
+     	 (0 & SelAS);          			" SelAS = 1 -> 0 (shifter not established yet)
+
+
+"mux choosing between updating A or keeping A -------------------------------------
+" keep A if instruction is pure logic comparison
+" update A if instruction is arithmic computation
+
+A  := (ALoad & !SelA) #          	" Sel = 00 -> A
+     (A & SelA);                    " Sel = 01 -> B
+
+
+" The shifter/rotator (not yet implemented)
+
+
+" Flag Generation -----------------------------------------------------------------
+
+NewFlag0 = (ALoad ==ZERO); 										" Zero flag generation
+NewFlag1 = ALoad7; 													" Sign flag generation
+NewFlag2 = (AddLoad7 & F7 & !ALoad7) # (!AddLoad7 & !F7 & ALoad7); 	" Signed Overflow flag generation
+COutS = 0;															" Carryout from shifter (not yet established)			
+NewFlag3 = (COutA & !SelCarry) #          							" SelCarry = 0 -> show carry
+           (!COutA & SelCarry);               						" SelCarry = 1 -> show borrow
+Flags4 = 0;
+Flags6 = 0;
+[NewFlag7..NewFlag4] = [NewFlag7..NewFlag4];
+
+
+" Flag MASK Mux -------------------------------------------------------------------
+
+OldFlags := (NewFlags & MASK & !SelPop) #          	 "SelPop = 0 & MASK =1 -> NewFlags (update)
+            (OldFlags & !MASK & !SelPop) #			 "SelPop = 0 & MASK =0 -> OldFlags (don't update)
+	    	(PopfLoad & SelPop);          			 "SelPop = 1 -> PopfLoad (load ALU result)
+
+End ALU

@@ -1,0 +1,11 @@
+[OPT WINDOWS]
+MAIN_WINDOW_POSITION=0,0,1707,1067
+CHILD_FRAME_STATE=Maximal
+CHILD_WINDOW_SIZE=1707,830
+CHILD_WINDOW_POS=-8,-34
+[OPT GUI SETTING]
+Remember_Setting=1
+ACTIVE_SHEET=Opt Global Constraints
+[Opt Global Constraints]
+Constraint Name=247,no
+Constraint Value=163,no
